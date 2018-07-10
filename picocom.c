@@ -126,8 +126,8 @@ const char *flow_str[] = {
 #define M_NFLAGS 14
 
 /* default character mappings */
-#define M_I_DFL 0
-#define M_O_DFL 0
+#define M_I_DFL (M_IGNCR | M_LFCRLF)
+#define M_O_DFL (M_CRCRLF | M_LFCRLF)
 #define M_E_DFL (M_DELBS | M_CRCRLF)
 
 /* character mapping names */
@@ -184,7 +184,7 @@ print_map (int flags)
     for (i = 0; i < M_NFLAGS; i++)
         if ( flags & (1 << i) )
             printf("%s,", map_names[i].name);
-    printf("\n");
+    printf("\r\n");
 }
 
 /**********************************************************************/
@@ -221,7 +221,7 @@ struct {
     int quiet;
 } opts = {
     .port = NULL,
-    .baud = 9600,
+    .baud = 115200,
     .flow = FC_NONE,
     .parity = P_NONE,
     .databits = 8,
@@ -361,7 +361,7 @@ uucp_lock(void)
     fd = open(lockname, O_WRONLY|O_CREAT|O_EXCL, 0666);
     if ( fd < 0 ) { lockname[0] = '\0'; return -1; }
     umask(m);
-    snprintf(buf, sizeof(buf), "%04d\n", getpid());
+    snprintf(buf, sizeof(buf), "%04d\r\n", getpid());
     write(fd, buf, strlen(buf));
     close(fd);
 
@@ -817,7 +817,7 @@ do_map (char *b, int map, char c)
         b[0] = c; n = 1;
     }
 
-    assert(n > 0 && n <= M_MAXMAP);
+    assert(n >= 0 && n <= M_MAXMAP);
 
     return n;
 }
@@ -1153,27 +1153,27 @@ run_cmd(int fd, const char *cmd, const char *args_extra)
         argc = 0;
         r = split_quoted(cmd, &argc, argv, RUNCMD_ARGS_MAX);
         if ( r < 0 ) {
-            fd_printf(STE, "Cannot parse command\n");
+            fd_printf(STE, "Cannot parse command\r\n");
             exit(RUNCMD_EXEC_FAIL);
         }
         r = split_quoted(args_extra, &argc, argv, RUNCMD_ARGS_MAX);
         if ( r < 0 ) {
-            fd_printf(STE, "Cannot parse extra args\n");
+            fd_printf(STE, "Cannot parse extra args\r\n");
             exit(RUNCMD_EXEC_FAIL);
         }
         if ( argc < 1 ) {
-            fd_printf(STE, "No command given\n");
+            fd_printf(STE, "No command given\r\n");
             exit(RUNCMD_EXEC_FAIL);
         }
         argv[argc] = NULL;
 
         /* run extenral command */
-        fd_printf(STE, "$ %s %s\n", cmd, args_extra);
+        fd_printf(STE, "$ %s %s\r\n", cmd, args_extra);
         establish_child_signal_handlers();
         sigprocmask(SIG_SETMASK, &sigm_old, NULL);
         execvp(argv[0], argv);
 
-        fd_printf(STE, "exec: %s\n", strerror(errno));
+        fd_printf(STE, "exec: %s\r\n", strerror(errno));
         exit(RUNCMD_EXEC_FAIL);
     }
 }
@@ -1607,77 +1607,77 @@ show_usage(char *name)
     s = strrchr(name, '/');
     s = s ? s+1 : name;
 
-    printf("picocom v%s\n", VERSION_STR);
+    printf("picocom v%s\r\n", VERSION_STR);
 
-    printf("\nCompiled-in options:\n");
-    printf("  TTY_Q_SZ is %d\n", TTY_Q_SZ);
+    printf("\r\nCompiled-in options:\r\n");
+    printf("  TTY_Q_SZ is %d\r\n", TTY_Q_SZ);
 #ifdef HIGH_BAUD
-    printf("  HIGH_BAUD is enabled\n");
+    printf("  HIGH_BAUD is enabled\r\n");
 #endif
 #ifdef USE_FLOCK
-    printf("  USE_FLOCK is enabled\n");
+    printf("  USE_FLOCK is enabled\r\n");
 #endif
 #ifdef UUCP_LOCK_DIR
-    printf("  UUCP_LOCK_DIR is: %s\n", UUCP_LOCK_DIR);
+    printf("  UUCP_LOCK_DIR is: %s\r\n", UUCP_LOCK_DIR);
 #endif
 #ifdef LINENOISE
-    printf("  LINENOISE is enabled\n");
-    printf("  HISTFILE is: %s\n", HISTFILE);
+    printf("  LINENOISE is enabled\r\n");
+    printf("  HISTFILE is: %s\r\n", HISTFILE);
 #endif
 #ifdef USE_CUSTOM_BAUD
-    printf("  USE_CUSTOM_BAUD is enabled\n");
+    printf("  USE_CUSTOM_BAUD is enabled\r\n");
     if ( ! use_custom_baud() )
-        printf("  NO_CUSTOM_BAUD is set\n");
+        printf("  NO_CUSTOM_BAUD is set\r\n");
 #endif
 
-    printf("\nUsage is: %s [options] <tty port device>\n", s);
-    printf("Options are:\n");
-    printf("  --<b>aud <baudrate>\n");
-    printf("  --<f>low x (=soft,xon/xoff) | h (=hard) | n (=none)\n");
-    printf("  --parit<y> o (=odd) | e (=even) | n (=none)\n");
-    printf("  --<d>atabits 5 | 6 | 7 | 8\n");
-    printf("  --sto<p>bits 1 | 2\n");
-    printf("  --<e>scape <char>\n");
-    printf("  --<n>o-escape\n");
-    printf("  --e<c>ho\n");
-    printf("  --no<i>nit\n");
-    printf("  --no<r>eset\n");
-    printf("  --hang<u>p\n");
-    printf("  --no<l>ock\n");
-    printf("  --<s>end-cmd <command>\n");
-    printf("  --recei<v>e-cmd <command>\n");
-    printf("  --imap <map> (input mappings)\n");
-    printf("  --omap <map> (output mappings)\n");
-    printf("  --emap <map> (local-echo mappings)\n");
-    printf("  --lo<g>file <filename>\n");
-    printf("  --inits<t>ring <string>\n");
-    printf("  --e<x>it-after <msec>\n");
-    printf("  --e<X>it\n");
-    printf("  --lower-rts\n");
-    printf("  --raise-rts\n");
-    printf("  --lower-dtr\n");
-    printf("  --raise-dtr\n");
-    printf("  --<q>uiet\n");
-    printf("  --<h>elp\n");
-    printf("<map> is a comma-separated list of one or more of:\n");
-    printf("  crlf : map CR --> LF\n");
-    printf("  crcrlf : map CR --> CR + LF\n");
-    printf("  igncr : ignore CR\n");
-    printf("  lfcr : map LF --> CR\n");
-    printf("  lfcrlf : map LF --> CR + LF\n");
-    printf("  ignlf : ignore LF\n");
-    printf("  bsdel : map BS --> DEL\n");
-    printf("  delbs : map DEL --> BS\n");
-    printf("  spchex : map special chars (excl. CR, LF & TAB) --> hex\n");
-    printf("  tabhex : map TAB --> hex\n");
-    printf("  crhex : map CR --> hex\n");
-    printf("  lfhex : map LF --> hex\n");
-    printf("  8bithex : map 8-bit chars --> hex\n");
-    printf("  nrmhex : map normal ascii chars --> hex\n");
-    printf("<?> indicates the equivalent short option.\n");
-    printf("Short options are prefixed by \"-\" instead of by \"--\".\n");
+    printf("\r\nUsage is: %s [options] <tty port device>\r\n", s);
+    printf("Options are:\r\n");
+    printf("  --<b>aud <baudrate>\r\n");
+    printf("  --<f>low x (=soft,xon/xoff) | h (=hard) | n (=none)\r\n");
+    printf("  --parit<y> o (=odd) | e (=even) | n (=none)\r\n");
+    printf("  --<d>atabits 5 | 6 | 7 | 8\r\n");
+    printf("  --sto<p>bits 1 | 2\r\n");
+    printf("  --<e>scape <char>\r\n");
+    printf("  --<n>o-escape\r\n");
+    printf("  --e<c>ho\r\n");
+    printf("  --no<i>nit\r\n");
+    printf("  --no<r>eset\r\n");
+    printf("  --hang<u>p\r\n");
+    printf("  --no<l>ock\r\n");
+    printf("  --<s>end-cmd <command>\r\n");
+    printf("  --recei<v>e-cmd <command>\r\n");
+    printf("  --imap <map> (input mappings)\r\n");
+    printf("  --omap <map> (output mappings)\r\n");
+    printf("  --emap <map> (local-echo mappings)\r\n");
+    printf("  --lo<g>file <filename>\r\n");
+    printf("  --inits<t>ring <string>\r\n");
+    printf("  --e<x>it-after <msec>\r\n");
+    printf("  --e<X>it\r\n");
+    printf("  --lower-rts\r\n");
+    printf("  --raise-rts\r\n");
+    printf("  --lower-dtr\r\n");
+    printf("  --raise-dtr\r\n");
+    printf("  --<q>uiet\r\n");
+    printf("  --<h>elp\r\n");
+    printf("<map> is a comma-separated list of one or more of:\r\n");
+    printf("  crlf : map CR --> LF\r\n");
+    printf("  crcrlf : map CR --> CR + LF\r\n");
+    printf("  igncr : ignore CR\r\n");
+    printf("  lfcr : map LF --> CR\r\n");
+    printf("  lfcrlf : map LF --> CR + LF\r\n");
+    printf("  ignlf : ignore LF\r\n");
+    printf("  bsdel : map BS --> DEL\r\n");
+    printf("  delbs : map DEL --> BS\r\n");
+    printf("  spchex : map special chars (excl. CR, LF & TAB) --> hex\r\n");
+    printf("  tabhex : map TAB --> hex\r\n");
+    printf("  crhex : map CR --> hex\r\n");
+    printf("  lfhex : map LF --> hex\r\n");
+    printf("  8bithex : map 8-bit chars --> hex\r\n");
+    printf("  nrmhex : map normal ascii chars --> hex\r\n");
+    printf("<?> indicates the equivalent short option.\r\n");
+    printf("Short options are prefixed by \"-\" instead of by \"--\".\r\n");
 #else /* defined NO_HELP */
-    printf("Help disabled.\n");
+    printf("Help disabled.\r\n");
 #endif /* of NO_HELP */
     fflush(stdout);
 }
@@ -1749,17 +1749,17 @@ parse_args(int argc, char *argv[])
         case 'I':
             map = parse_map(optarg);
             if (map >= 0) opts.imap = map;
-            else { fprintf(stderr, "Invalid --imap\n"); r = -1; }
+            else { fprintf(stderr, "Invalid --imap\r\n"); r = -1; }
             break;
         case 'O':
             map = parse_map(optarg);
             if (map >= 0) opts.omap = map;
-            else { fprintf(stderr, "Invalid --omap\n"); r = -1; }
+            else { fprintf(stderr, "Invalid --omap\r\n"); r = -1; }
             break;
         case 'E':
             map = parse_map(optarg);
             if (map >= 0) opts.emap = map;
-            else { fprintf(stderr, "Invalid --emap\n"); r = -1; }
+            else { fprintf(stderr, "Invalid --emap\r\n"); r = -1; }
             break;
         case 'c':
             opts.lecho = 1;
@@ -1801,7 +1801,7 @@ parse_args(int argc, char *argv[])
                 opts.flow = FC_NONE;
                 break;
             default:
-                fprintf(stderr, "Invalid --flow: %c\n", optarg[0]);
+                fprintf(stderr, "Invalid --flow: %c\r\n", optarg[0]);
                 r = -1;
                 break;
             }
@@ -1809,7 +1809,7 @@ parse_args(int argc, char *argv[])
         case 'b':
             opts.baud = atoi(optarg);
             if ( opts.baud == 0 || ! term_baud_ok(opts.baud) ) {
-                fprintf(stderr, "Invalid --baud: %d\n", opts.baud);
+                fprintf(stderr, "Invalid --baud: %d\r\n", opts.baud);
                 r = -1;
             }
             break;
@@ -1825,7 +1825,7 @@ parse_args(int argc, char *argv[])
                 opts.parity = P_NONE;
                 break;
             default:
-                fprintf(stderr, "Invalid --parity: %c\n", optarg[0]);
+                fprintf(stderr, "Invalid --parity: %c\r\n", optarg[0]);
                 r = -1;
                 break;
             }
@@ -1845,7 +1845,7 @@ parse_args(int argc, char *argv[])
                 opts.databits = 8;
                 break;
             default:
-                fprintf(stderr, "Invalid --databits: %c\n", optarg[0]);
+                fprintf(stderr, "Invalid --databits: %c\r\n", optarg[0]);
                 r = -1;
                 break;
             }
@@ -1870,7 +1870,7 @@ parse_args(int argc, char *argv[])
                 opts.parity = P_NONE;
                 break;
             default:
-                fprintf(stderr, "Invalid --stopbits: %c\n", optarg[0]);
+                fprintf(stderr, "Invalid --stopbits: %c\r\n", optarg[0]);
                 r = -1;
                 break;
             }
@@ -1898,7 +1898,7 @@ parse_args(int argc, char *argv[])
         case 'x':
             opts.exit_after = strtol(optarg, &ep, 10);
             if ( ! ep || *ep != '\0' || opts.exit_after < 0 ) {
-                fprintf(stderr, "Inavild --exit-after: %s\n", optarg);
+                fprintf(stderr, "Inavild --exit-after: %s\r\n", optarg);
                 r = -1;
                 break;
             }
@@ -1914,22 +1914,22 @@ parse_args(int argc, char *argv[])
             exit(EXIT_SUCCESS);
         case '?':
         default:
-            fprintf(stderr, "Unrecognized option(s)\n");
+            fprintf(stderr, "Unrecognized option(s)\r\n");
             r = -1;
             break;
         }
         if ( r < 0 ) {
-            fprintf(stderr, "Run with '--help'.\n");
+            fprintf(stderr, "Run with '--help'.\r\n");
             exit(EXIT_FAILURE);
         }
     } /* while */
 
     if ( opts.raise_rts && opts.lower_rts ) {
-        fprintf(stderr, "Both --raise-rts and --lower-rts given\n");
+        fprintf(stderr, "Both --raise-rts and --lower-rts given\r\n");
         exit(EXIT_FAILURE);
     }
     if ( opts.raise_dtr && opts.lower_dtr ) {
-        fprintf(stderr, "Both --raise-dtr and --lower-dtr given\n");
+        fprintf(stderr, "Both --raise-dtr and --lower-dtr given\r\n");
         exit(EXIT_FAILURE);
     }
 
@@ -1937,13 +1937,13 @@ parse_args(int argc, char *argv[])
     if ( opts.exit ) opts.exit_after = -1;
 
     if ( (argc - optind) < 1) {
-        fprintf(stderr, "No port given\n");
-        fprintf(stderr, "Run with '--help'.\n");
+        fprintf(stderr, "No port given\r\n");
+        fprintf(stderr, "Run with '--help'.\r\n");
         exit(EXIT_FAILURE);
     }
     opts.port = strdup(argv[argc-1]);
     if ( ! opts.port ) {
-        fprintf(stderr, "Out of memory\n");
+        fprintf(stderr, "Out of memory\r\n");
         exit(EXIT_FAILURE);
     }
 
@@ -1951,47 +1951,47 @@ parse_args(int argc, char *argv[])
         return;
 
 #ifndef NO_HELP
-    printf("picocom v%s\n", VERSION_STR);
-    printf("\n");
-    printf("port is        : %s\n", opts.port);
-    printf("flowcontrol    : %s\n", flow_str[opts.flow]);
-    printf("baudrate is    : %d\n", opts.baud);
-    printf("parity is      : %s\n", parity_str[opts.parity]);
-    printf("databits are   : %d\n", opts.databits);
-    printf("stopbits are   : %d\n", opts.stopbits);
+    printf("picocom v%s\r\n", VERSION_STR);
+    printf("\r\n");
+    printf("port is        : %s\r\n", opts.port);
+    printf("flowcontrol    : %s\r\n", flow_str[opts.flow]);
+    printf("baudrate is    : %d\r\n", opts.baud);
+    printf("parity is      : %s\r\n", parity_str[opts.parity]);
+    printf("databits are   : %d\r\n", opts.databits);
+    printf("stopbits are   : %d\r\n", opts.stopbits);
     if ( opts.noescape ) {
-        printf("escape is      : none\n");
+        printf("escape is      : none\r\n");
     } else {
-        printf("escape is      : C-%c\n", KEYC(opts.escape));
+        printf("escape is      : C-%c\r\n", KEYC(opts.escape));
     }
-    printf("local echo is  : %s\n", opts.lecho ? "yes" : "no");
-    printf("noinit is      : %s\n", opts.noinit ? "yes" : "no");
-    printf("noreset is     : %s\n", opts.noreset ? "yes" : "no");
-    printf("hangup is      : %s\n", opts.hangup ? "yes" : "no");
+    printf("local echo is  : %s\r\n", opts.lecho ? "yes" : "no");
+    printf("noinit is      : %s\r\n", opts.noinit ? "yes" : "no");
+    printf("noreset is     : %s\r\n", opts.noreset ? "yes" : "no");
+    printf("hangup is      : %s\r\n", opts.hangup ? "yes" : "no");
 #if defined (UUCP_LOCK_DIR) || defined (USE_FLOCK)
-    printf("nolock is      : %s\n", opts.nolock ? "yes" : "no");
+    printf("nolock is      : %s\r\n", opts.nolock ? "yes" : "no");
 #endif
-    printf("send_cmd is    : %s\n",
+    printf("send_cmd is    : %s\r\n",
            (opts.send_cmd[0] == '\0') ? "disabled" : opts.send_cmd);
-    printf("receive_cmd is : %s\n",
+    printf("receive_cmd is : %s\r\n",
            (opts.receive_cmd[0] == '\0') ? "disabled" : opts.receive_cmd);
     printf("imap is        : "); print_map(opts.imap);
     printf("omap is        : "); print_map(opts.omap);
     printf("emap is        : "); print_map(opts.emap);
-    printf("logfile is     : %s\n", opts.log_filename ? opts.log_filename : "none");
+    printf("logfile is     : %s\r\n", opts.log_filename ? opts.log_filename : "none");
     if ( opts.initstring ) {
-        printf("initstring len : %lu bytes\n",
+        printf("initstring len : %lu bytes\r\n",
                (unsigned long)strlen(opts.initstring));
     } else {
-        printf("initstring     : none\n");
+        printf("initstring     : none\r\n");
     }
     if (opts.exit_after < 0) {
-        printf("exit_after is  : not set\n");
+        printf("exit_after is  : not set\r\n");
     } else {
-        printf("exit_after is  : %d ms\n", opts.exit_after);
+        printf("exit_after is  : %d ms\r\n", opts.exit_after);
     }
-    printf("exit is        : %s\n", opts.exit ? "yes" : "no");
-    printf("\n");
+    printf("exit is        : %s\r\n", opts.exit ? "yes" : "no");
+    printf("\r\n");
     fflush(stdout);
 #endif /* of NO_HELP */
 }

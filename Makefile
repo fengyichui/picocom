@@ -3,10 +3,10 @@ VERSION = 3.2a
 
 #CC ?= gcc
 CPPFLAGS += -DVERSION_STR=\"$(VERSION)\"
-CFLAGS += -Wall -g
+CFLAGS += -Wall -g -O2
 
 LD = $(CC)
-LDFLAGS ?= -g
+LDFLAGS ?= -g -O2
 LDLIBS ?=
 
 all: picocom
