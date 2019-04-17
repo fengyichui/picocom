@@ -37,6 +37,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <limits.h>
+#include <time.h>
 #ifdef USE_FLOCK
 #include <sys/file.h>
 #endif
@@ -100,6 +101,7 @@ const char *flow_str[] = {
 #define KEY_LECHO   CKEY('c') /* toggle local echo */
 #define KEY_STATUS  CKEY('v') /* show program options */
 #define KEY_HELP    CKEY('h') /* show help (same as [C-k]) */
+#define KEY_SEP     CKEY('z') /* Separator */
 #define KEY_KEYS    CKEY('k') /* show available command keys */
 #define KEY_SEND    CKEY('s') /* send file */
 #define KEY_RECEIVE CKEY('r') /* receive file */
@@ -1052,6 +1054,8 @@ show_keys()
               KEYC(KEY_STATUS));
     fd_printf(STO, "*** [C-%c] : Show this message\r\n",
               KEYC(KEY_HELP));
+    fd_printf(STO, "*** [C-%c] : Separator\r\n",
+              KEYC(KEY_SEP));
     fd_printf(STO, "\r\n");
 #else /* defined NO_HELP */
     fd_printf(STO, "*** Help is disabled.\r\n");
@@ -1234,6 +1238,16 @@ do_command (unsigned char c)
     case KEY_HELP:
     case KEY_KEYS:
         show_keys();
+        break;
+    case KEY_SEP:
+        {
+            time_t now;
+            struct tm *tm_now;
+            time(&now);
+            tm_now = localtime(&now);
+            fd_printf(STO, "\r\n*** %04d-%02d-%02d %02d:%02d:%02d *************************************\r\n",
+                    tm_now->tm_year+1900, tm_now->tm_mon+1, tm_now->tm_mday, tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec);
+        }
         break;
     case KEY_PULSE:
         fd_printf(STO, "\r\n*** pulse DTR ***\r\n");
