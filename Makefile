@@ -1,5 +1,5 @@
 
-VERSION = 3.2a
+VERSION = 4.0
 
 #CC ?= gcc
 CPPFLAGS += -DVERSION_STR=\"$(VERSION)\"
@@ -43,11 +43,13 @@ linenoise-1.0/linenoise.o : linenoise-1.0/linenoise.c linenoise-1.0/linenoise.h
 
 ## Comment this in to disable custom baudrate support
 ## on ALL systems (even on these enabled by default).
-#CPPFLAGS += -DNO_CUSTOM_BAUD
+CPPFLAGS += -DNO_CUSTOM_BAUD
 
 ## Comment this IN to remove help strings (saves ~ 4-6 Kb).
 #CPPFLAGS += -DNO_HELP
 
+## Comment this out to disable inotify support for watching files on Linux
+CPPFLAGS += -DINOTIFY_SUPPORT
 
 OBJS += picocom.o term.o fdio.o split.o custbaud.o termios2.o custbaud_bsd.o
 picocom : $(OBJS)
