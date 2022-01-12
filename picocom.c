@@ -134,7 +134,7 @@ const char *flow_str[] = {
 
 /* default character mappings */
 #define M_I_DFL (M_IGNCR | M_LFCRLF)
-#define M_O_DFL (M_CRCRLF | M_LFCRLF)
+#define M_O_DFL (M_CRCRLF | M_LFCRLF | M_DELBS)
 #define M_E_DFL (M_DELBS | M_CRCRLF)
 
 /* character mapping names */
