@@ -110,7 +110,8 @@ const char *flow_str[] = {
 #define KEY_KEYS    CKEY('k') /* show available command keys */
 #define KEY_SEND    CKEY('s') /* send file */
 #define KEY_RECEIVE CKEY('r') /* receive file */
-#define KEY_HEX     CKEY('w') /* write hex */
+#define KEY_HEX     CKEY('e') /* write hex */
+#define KEY_WRITE   CKEY('w') /* write string */
 #define KEY_BREAK   CKEY('\\') /* break */
 
 /**********************************************************************/
@@ -390,7 +391,7 @@ uucp_unlock(void)
 
 /**********************************************************************/
 
-#define HEXBUF_SZ 128
+#define HEXBUF_SZ 256
 #define HEXDELIM " \r;:-_.,/"
 
 #define hexisdelim(c) ( strchr(HEXDELIM, (c)) != NULL )
@@ -439,6 +440,45 @@ hex2bin(unsigned char *buf, int sz, const char *str)
     }
 
     return i;
+}
+
+int
+str2cstr(char *buf, int sz, const char *str)
+{
+    int i, n;
+    for (i=0,n=0; n<sz; ++i,++n) {
+        if (str[i] == '\0') {
+            break;
+        } else if (str[i] == '\\') {
+            if (str[++i] == '\0')
+                break;
+            switch (str[i]) {
+                case 'a':  buf[n] = '\a'; break;      // \a     07    Alert (Beep, Bell) (added in C89)[1]
+                case 'b':  buf[n] = '\b'; break;      // \b     08    Backspace
+                case 'e':  buf[n] = '\e'; break;      // \e     1B    Escape character
+                case 'f':  buf[n] = '\f'; break;      // \f     0C    Formfeed Page Break
+                case 'n':  buf[n] = '\n'; break;      // \n     0A    Newline (Line Feed); see notes below
+                case 'r':  buf[n] = '\r'; break;      // \r     0D    Carriage Return
+                case 't':  buf[n] = '\t'; break;      // \t     09    Horizontal Tab
+                case 'v':  buf[n] = '\v'; break;      // \v     0B    Vertical Tab
+                case '\\': buf[n] = '\\'; break;      // \\     5C    Backslash
+                case '\'': buf[n] = '\''; break;      // \'     27    Apostrophe or single quotation mark
+                case '"':  buf[n] = '\"'; break;      // \"     22    Double quotation mark
+                case '?':  buf[n] = '\?'; break;      // \?     3F    Question mark (used to avoid trigraphs)
+                case 'x':                             // \xhh   any   The byte whose numerical value is given by hh… interpreted as a hexadecimal number
+                    if (str[++i] == '\0') {break;} buf[n] = hex2byte(str[i]) << 4;
+                    if (str[++i] == '\0') {break;} buf[n] = buf[n] | hex2byte(str[i]);
+                    break;
+                default: break;
+            }
+            if (str[i] == '\0')
+                break;
+        } else {
+            buf[n] = str[i];
+        }
+    }
+    buf[n] = '\0';
+    return n;
 }
 
 /**********************************************************************/
@@ -643,8 +683,30 @@ read_hex (unsigned char *buff, int sz)
         n = hex2bin(buff, sz, hexstr);
         if ( n < 0 )
             fd_printf(STO, "*** Invalid hex!");
+
+        if (n > 0)
+            add_history(hexstr);
+
         free(hexstr);
     } while (n < 0);
+
+    return n;
+}
+
+int
+read_str (char *buff, int sz)
+{
+    char *str;
+    int n = 0;
+
+    fd_printf(STO, "\r\n");
+    str = linenoise("*** str: ");
+    fd_printf(STO, "\r");
+    if ( str != NULL ) {
+        n = str2cstr(buff, sz, str);
+        add_history(str);
+        free(str);
+    }
 
     return n;
 }
@@ -1055,8 +1117,10 @@ show_keys()
               KEYC(KEY_BREAK));
     fd_printf(STO, "*** [C-%c] : Toggle local echo\r\n",
               KEYC(KEY_LECHO));
-    fd_printf(STO, "*** [C-%c] : Write hex\r\n",
+    fd_printf(STO, "*** [C-%c] : Write hex (11 AA FF, 11AAFF, 11:AA:FF, ...\r\n",
               KEYC(KEY_HEX));
+    fd_printf(STO, "*** [C-%c] : Write string (abc\\n, \\x11\\xAA\\xFF)\r\n",
+              KEYC(KEY_WRITE));
     fd_printf(STO, "*** [C-%c] : Send file\r\n",
               KEYC(KEY_SEND));
     fd_printf(STO, "*** [C-%c] : Receive file\r\n",
@@ -1393,6 +1457,16 @@ do_command (unsigned char c)
         n = read_hex(hexbuf, sizeof(hexbuf));
         if ( n < 0 ) {
             fd_printf(STO, "*** cannot read hex ***\r\n");
+            break;
+        }
+        if ( tty_q_push((char *)hexbuf, n) != n )
+            fd_printf(STO, "*** output buffer full ***\r\n");
+        fd_printf(STO, "*** wrote %d bytes ***\r\n", n);
+        break;
+    case KEY_WRITE:
+        n = read_str((char *)hexbuf, sizeof(hexbuf));
+        if ( n < 0 ) {
+            fd_printf(STO, "*** cannot read string ***\r\n");
             break;
         }
         if ( tty_q_push((char *)hexbuf, n) != n )
