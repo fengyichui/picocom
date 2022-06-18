@@ -1026,8 +1026,17 @@ int linenoiseHistoryAdd(const char *line) {
         memset(history,0,(sizeof(char*)*history_max_len));
     }
 
-    /* Don't add duplicated lines. */
-    if (history_len && !strcmp(history[history_len-1], line)) return 0;
+    /* Don't add duplicated lines. (fix by liqiang)*/
+    for (int i=0; i<history_len; ++i) {
+        if (!strcmp(history[i], line)) {
+            if (i != history_len-1) {
+                linecopy = history[i];
+                memmove(history+i,history+i+1,sizeof(char*)*(history_len-i-1));
+                history[history_len-1] = linecopy;
+            }
+            return 0;
+        }
+    }
 
     /* Add an heap allocated copy of the line in the history.
      * If we reached the max length, remove the older line. */
