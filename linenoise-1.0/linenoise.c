@@ -194,6 +194,21 @@ FILE *lndebug_fp = NULL;
 #define lndebug(fmt, ...)
 #endif
 
+char *tbuf = NULL;
+int tpos = -1;
+unsigned int pfrom = 0;
+int copy_once_lock = 0;
+
+void copy_once(char **copy, char *data)
+{
+    if (copy_once_lock)
+        return;
+    if (*copy)
+        free(*copy);
+    *copy = strdup(data);
+    copy_once_lock = 1;
+}
+
 /* ======================= Low level terminal handling ====================== */
 
 /* Set if to use or not the multi line mode. */
@@ -774,6 +789,12 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
             if (c == 0) continue;
         }
 
+        /* Only keep searching buf if it's Ctrl-r, destroy otherwise */
+        if (c != 18) {
+            pfrom = 0;
+            copy_once_lock = 0;
+        }
+
         switch(c) {
         case ENTER:    /* enter */
             history_len--;
@@ -881,6 +902,15 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
             l.pos = l.len = 0;
             refreshLine(&l);
             break;
+        case 18: /* Ctrl+r, search the history */
+            copy_once(&tbuf, buf);
+            if ((tpos = linenoiseHistorySearch(tbuf)) != -1) {
+                strcpy(buf, history[tpos]);
+                l.len = l.pos = strlen(buf);
+                refreshLine(&l);
+            } else {
+                pfrom = 0;
+            }
         case CTRL_K: /* Ctrl+k, delete from current to end of line. */
             buf[l.pos] = '\0';
             l.len = l.pos;
@@ -1005,6 +1035,8 @@ static void freeHistory(void) {
 static void linenoiseAtExit(void) {
     disableRawMode(STDIN_FILENO);
     freeHistory();
+    if (tbuf)
+        free(tbuf);
 }
 
 /* This is the API call to add a new entry in the linenoise history.
@@ -1095,6 +1127,22 @@ int linenoiseHistorySave(const char *filename) {
         fprintf(fp,"%s\n",history[j]);
     fclose(fp);
     return 0;
+}
+
+int linenoiseHistorySearch(char *str) {
+
+    if (str == NULL)
+        return -1;
+
+    int i;
+    for (i = pfrom; i < history_len; i++) {
+        if (strstr(history[i], str) != NULL) {
+            pfrom = i + 1;
+            return i;
+        }
+    }
+
+    return -1;
 }
 
 /* Load the history from the specified file. If the file does not exist
