@@ -39,7 +39,6 @@
 #include <sys/wait.h>
 #include <limits.h>
 #include <time.h>
-#include <sys/time.h>
 #ifdef USE_FLOCK
 #include <sys/file.h>
 #endif
@@ -764,23 +763,37 @@ static void cmd_completion_cb (const char *buf, linenoiseCompletions *lc)
     }
 }
 
-static void sig_alrm_handler(int signo)
+static void cmd_timer_handler(union sigval v)
 {
-    toggle_rts();
-    // printf("rts toggle\r\n");
+    if (v.sival_int == 1) // toggle RTS
+    {
+        toggle_rts();
+    }
 }
 
 static void cmd_toggle_rts(int period_ms)
 {
-    signal(SIGALRM, sig_alrm_handler);
+    static timer_t timerid = NULL;
 
-    struct itimerval olditv;
-    struct itimerval itv;
-    itv.it_interval.tv_sec = 0;
-    itv.it_interval.tv_usec = period_ms * 1000;
-    itv.it_value.tv_sec = 0;
-    itv.it_value.tv_usec = period_ms ? 1 : 0;
-    setitimer(ITIMER_REAL, &itv, &olditv);
+    // if does not create the timer, create it.
+    if (timerid == NULL)
+    {
+        struct sigevent evp; 
+        memset(&evp, 0, sizeof(struct sigevent));
+        evp.sigev_value.sival_int = 1; // passt to handler
+        evp.sigev_notify = SIGEV_THREAD;
+        evp.sigev_notify_function = cmd_timer_handler;
+        timer_create(CLOCK_REALTIME, &evp, &timerid);
+    }
+
+    // start timer (0 to pause)
+    struct itimerspec it; 
+    it.it_interval.tv_sec = 0;
+    it.it_interval.tv_nsec = period_ms * 1000 * 1000;
+    it.it_value.tv_sec = 0;
+    it.it_value.tv_nsec = period_ms ? 1 : 0;
+    timer_settime(timerid, 0, &it, NULL);
+    //timer_delete(timerid);
 
     if (period_ms)
         fd_printf(STO, "*** toggle RTS with period %dms ***\r\n", period_ms);
