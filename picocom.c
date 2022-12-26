@@ -30,6 +30,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -38,6 +39,7 @@
 #include <sys/wait.h>
 #include <limits.h>
 #include <time.h>
+#include <sys/time.h>
 #ifdef USE_FLOCK
 #include <sys/file.h>
 #endif
@@ -103,7 +105,7 @@ const char *flow_str[] = {
 #define KEY_PARITY  CKEY('y') /* change parity mode */
 #define KEY_BITS    CKEY('i') /* change number of databits */
 #define KEY_STOP    CKEY('j') /* change number of stopbits */
-#define KEY_LECHO   CKEY('c') /* toggle local echo */
+#define KEY_LECHO   CKEY('l') /* toggle local echo */
 #define KEY_STATUS  CKEY('v') /* show program options */
 #define KEY_HELP    CKEY('h') /* show help (same as [C-k]) */
 #define KEY_SEP     CKEY('z') /* Separator */
@@ -113,6 +115,7 @@ const char *flow_str[] = {
 #define KEY_HEX     CKEY('e') /* write hex */
 #define KEY_WRITE   CKEY('w') /* write string */
 #define KEY_BREAK   CKEY('\\') /* break */
+#define KEY_CMD     CKEY('c') /* command mode */
 
 /**********************************************************************/
 
@@ -713,6 +716,117 @@ read_str (char *buff, int sz)
 
 #endif /* of ifndef LINENOISE */
 
+static int toggle_dtr(void)
+{
+    int r;
+
+    if ( dtr_up )
+        r = term_lower_dtr(tty_fd);
+    else
+        r = term_raise_dtr(tty_fd);
+    if ( r >= 0 )
+        dtr_up = ! dtr_up;
+
+    return dtr_up;
+}
+
+static int toggle_rts(void)
+{
+    int r;
+
+    if ( rts_up )
+        r = term_lower_rts(tty_fd);
+    else
+        r = term_raise_rts(tty_fd);
+    if ( r >= 0 )
+        rts_up = ! rts_up;
+
+    return rts_up;
+}
+
+static void cmd_help(void)
+{
+    fd_printf(STO, "*** [C-%c] : Command\r\n", KEYC(KEY_CMD));
+    fd_printf(STO, "            ┕ toggle rts [stop/period_ms]\r\n");
+}
+
+static void sig_alrm_handler(int signo)
+{
+    toggle_rts();
+    // printf("rts toggle\r\n");
+}
+
+static void cmd_toggle_rts(int period_ms)
+{
+    signal(SIGALRM, sig_alrm_handler);
+
+    struct itimerval olditv;
+    struct itimerval itv;
+    itv.it_interval.tv_sec = 0;
+    itv.it_interval.tv_usec = period_ms * 1000;
+    itv.it_value.tv_sec = 0;
+    itv.it_value.tv_usec = 1;
+    setitimer(ITIMER_REAL, &itv, &olditv);
+
+    if (period_ms)
+        fd_printf(STO, "*** toggle RTS with period %dms ***\r\n", period_ms);
+    else
+        fd_printf(STO, "*** toggle RTS stop ***\r\n");
+}
+
+void read_exec_cmd (void)
+{
+    char *cmdstr;
+    bool ok = false;
+
+    fd_printf(STO, "\r\n");
+    cmdstr = linenoise("*** cmd: ");
+    fd_printf(STO, "\r");
+    if ( cmdstr == NULL ) {
+        return;
+    }
+    add_history(cmdstr);
+
+    int argc = 0;
+    char *argv[32];
+    char *p2 = strtok(cmdstr, " ");
+    while (p2 && argc < 32-1)
+    {
+        // printf("cmd argv[%d]: %s\r\n", argc, p2);
+        argv[argc++] = p2;
+        p2 = strtok(0, " ");
+    }
+    argv[argc] = 0;
+    // printf("cmd argc: %d\r\n", argc);
+
+    if (argc > 0)
+    {
+        if (strcasecmp("toggle", argv[0]) == 0)
+        {
+            if (argc > 1)
+            {
+                if (strcasecmp("rts", argv[1]) == 0)
+                {
+                    int period_ms = 100;
+                    if (argc > 2)
+                    {
+                        if (strcasecmp("stop", argv[2]) == 0)
+                            period_ms = 0;
+                        else
+                            period_ms = strtol(argv[2], 0, 0);
+                    }
+                    cmd_toggle_rts(period_ms);
+                    ok = true;
+                }
+            }
+        }
+    }
+
+    if(!ok)
+        cmd_help();
+
+    free(cmdstr);
+}
 /**********************************************************************/
 
 int
@@ -1131,6 +1245,7 @@ show_keys()
               KEYC(KEY_HELP));
     fd_printf(STO, "*** [C-%c] : Separator\r\n",
               KEYC(KEY_SEP));
+    cmd_help();
     fd_printf(STO, "\r\n");
 #else /* defined NO_HELP */
     fd_printf(STO, "*** Help is disabled.\r\n");
@@ -1299,7 +1414,7 @@ do_command (unsigned char c)
     const char *xfr_cmd;
     char *fname;
     unsigned char hexbuf[HEXBUF_SZ];
-    int n, r;
+    int n;
 
     switch (c) {
     case KEY_EXIT:
@@ -1332,20 +1447,12 @@ do_command (unsigned char c)
             dtr_up = 1;
         break;
     case KEY_TOG_DTR:
-        if ( dtr_up )
-            r = term_lower_dtr(tty_fd);
-        else
-            r = term_raise_dtr(tty_fd);
-        if ( r >= 0 ) dtr_up = ! dtr_up;
+        toggle_dtr();
         fd_printf(STO, "\r\n*** DTR: %s ***\r\n",
                   dtr_up ? "up" : "down");
         break;
     case KEY_TOG_RTS:
-        if ( rts_up )
-            r = term_lower_rts(tty_fd);
-        else
-            r = term_raise_rts(tty_fd);
-        if ( r >= 0 ) rts_up = ! rts_up;
+        toggle_rts();
         fd_printf(STO, "\r\n*** RTS: %s ***\r\n",
                   rts_up ? "up" : "down");
         break;
@@ -1476,6 +1583,9 @@ do_command (unsigned char c)
     case KEY_BREAK:
         term_break(tty_fd);
         fd_printf(STO, "\r\n*** break sent ***\r\n");
+        break;
+    case KEY_CMD:
+        read_exec_cmd();
         break;
     default:
         break;
