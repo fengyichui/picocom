@@ -750,6 +750,20 @@ static void cmd_help(void)
     fd_printf(STO, "            ┕ toggle rts [stop/period_ms]\r\n");
 }
 
+static void cmd_completion_cb (const char *buf, linenoiseCompletions *lc)
+{
+    const char *cmds_table[] = {
+        "toggle rts stop",
+        "toggle rts 100",
+    };
+
+    for (int i=0; i<sizeof(cmds_table)/sizeof(cmds_table[0]); ++i)
+    {
+        if (memcmp(cmds_table[i], buf, strlen(buf)) == 0)
+            linenoiseAddCompletion(lc, cmds_table[i]);
+    }
+}
+
 static void sig_alrm_handler(int signo)
 {
     toggle_rts();
@@ -779,9 +793,11 @@ void read_exec_cmd (void)
     char *cmdstr;
     bool ok = false;
 
+    linenoiseSetCompletionCallback(cmd_completion_cb);
     fd_printf(STO, "\r\n");
     cmdstr = linenoise("*** cmd: ");
     fd_printf(STO, "\r");
+    linenoiseSetCompletionCallback(NULL);
     if ( cmdstr == NULL ) {
         return;
     }
