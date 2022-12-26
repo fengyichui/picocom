@@ -765,7 +765,7 @@ static void cmd_toggle_rts(int period_ms)
     itv.it_interval.tv_sec = 0;
     itv.it_interval.tv_usec = period_ms * 1000;
     itv.it_value.tv_sec = 0;
-    itv.it_value.tv_usec = 1;
+    itv.it_value.tv_usec = period_ms ? 1 : 0;
     setitimer(ITIMER_REAL, &itv, &olditv);
 
     if (period_ms)
