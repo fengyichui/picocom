@@ -746,14 +746,16 @@ static int toggle_rts(void)
 static void cmd_help(void)
 {
     fd_printf(STO, "*** [C-%c] : Command\r\n", KEYC(KEY_CMD));
-    fd_printf(STO, "            ┕ toggle rts [stop/period_ms]\r\n");
+    fd_printf(STO, "            ┕ pwm rts/dtr [stop/freq_hz] [high_ratio(1/2)]\r\n");
 }
 
 static void cmd_completion_cb (const char *buf, linenoiseCompletions *lc)
 {
     const char *cmds_table[] = {
-        "toggle rts stop",
-        "toggle rts 100",
+        "pwm rts 5 1/2",
+        "pwm rts stop",
+        "pwm dtr 5 1/2",
+        "pwm dtr stop",
     };
 
     for (int i=0; i<sizeof(cmds_table)/sizeof(cmds_table[0]); ++i)
@@ -763,42 +765,94 @@ static void cmd_completion_cb (const char *buf, linenoiseCompletions *lc)
     }
 }
 
-static void cmd_timer_handler(union sigval v)
+typedef struct {
+    timer_t timer_id;
+    int ratio_high_level;
+    int ratio_all_level;
+    int ratio_index;
+    void (*sigev_notify_func)(union sigval);
+} cmd_pwm_ctrl_t;
+
+static void cmd_pwm_timer_rts_handler(union sigval v);
+static void cmd_pwm_timer_dtr_handler(union sigval v);
+
+static cmd_pwm_ctrl_t pwm_rts_ctrl = {NULL, 1, 2, 0, cmd_pwm_timer_rts_handler};
+static cmd_pwm_ctrl_t pwm_dtr_ctrl = {NULL, 1, 2, 0, cmd_pwm_timer_dtr_handler};
+
+static void cmd_pwm_timer_handler(cmd_pwm_ctrl_t *c)
 {
-    if (v.sival_int == 1) // toggle RTS
+    c->ratio_index++;
+    if (c->ratio_index == c->ratio_high_level)
     {
-        toggle_rts();
+        if (c == &pwm_rts_ctrl)
+        {
+            term_raise_rts(tty_fd);
+            rts_up = 1;
+        }
+        else
+        {
+            term_raise_dtr(tty_fd);
+            dtr_up = 1;
+        }
+    }
+    else if (c->ratio_index >= c->ratio_all_level)
+    {
+        c->ratio_index = 0;
+
+        if (c == &pwm_rts_ctrl)
+        {
+            term_lower_rts(tty_fd);
+            rts_up = 0;
+        }
+        else
+        {
+            term_lower_dtr(tty_fd);
+            dtr_up = 0;
+        }
     }
 }
 
-static void cmd_toggle_rts(int period_ms)
+static void cmd_pwm_timer_rts_handler(union sigval v)
 {
-    static timer_t timerid = NULL;
+    cmd_pwm_timer_handler(&pwm_rts_ctrl);
+}
+
+static void cmd_pwm_timer_dtr_handler(union sigval v)
+{
+    cmd_pwm_timer_handler(&pwm_dtr_ctrl);
+}
+
+static void cmd_pwm_rts_dtr(bool is_rts, float freq_hz, int ratio_high_level, int ratio_all_level)
+{
+    cmd_pwm_ctrl_t *c = is_rts ? &pwm_rts_ctrl : &pwm_dtr_ctrl;
+
+    c->ratio_high_level = ratio_high_level;
+    c->ratio_all_level = ratio_all_level;
+    c->ratio_index = 0;
 
     // if does not create the timer, create it.
-    if (timerid == NULL)
+    if (c->timer_id == NULL)
     {
         struct sigevent evp; 
         memset(&evp, 0, sizeof(struct sigevent));
         evp.sigev_value.sival_int = 1; // passt to handler
         evp.sigev_notify = SIGEV_THREAD;
-        evp.sigev_notify_function = cmd_timer_handler;
-        timer_create(CLOCK_REALTIME, &evp, &timerid);
+        evp.sigev_notify_function = c->sigev_notify_func;
+        timer_create(CLOCK_REALTIME, &evp, &c->timer_id);
     }
 
     // start timer (0 to pause)
     struct itimerspec it; 
     it.it_interval.tv_sec = 0;
-    it.it_interval.tv_nsec = period_ms * 1000 * 1000;
+    it.it_interval.tv_nsec = freq_hz ? (1000 * 1000 * 1000 / ratio_all_level / freq_hz) : 0;
     it.it_value.tv_sec = 0;
-    it.it_value.tv_nsec = period_ms ? 1 : 0;
-    timer_settime(timerid, 0, &it, NULL);
-    //timer_delete(timerid);
+    it.it_value.tv_nsec = freq_hz ? 1 : 0;
+    timer_settime(c->timer_id, 0, &it, NULL);
 
-    if (period_ms)
-        fd_printf(STO, "*** toggle RTS with period %dms ***\r\n", period_ms);
+    if (freq_hz)
+        fd_printf(STO, "*** PWM %s: Freq=%.3fhz HighRatio=%d/%d ***\r\n", is_rts?"RTS":"DTR", freq_hz, ratio_high_level, ratio_all_level);
     else
-        fd_printf(STO, "*** toggle RTS stop ***\r\n");
+        fd_printf(STO, "*** PWM %s: stop ***\r\n", is_rts?"RTS":"DTR");
 }
 
 void read_exec_cmd (void)
@@ -821,30 +875,42 @@ void read_exec_cmd (void)
     char *p2 = strtok(cmdstr, " ");
     while (p2 && argc < 32-1)
     {
-        // printf("cmd argv[%d]: %s\r\n", argc, p2);
         argv[argc++] = p2;
         p2 = strtok(0, " ");
     }
     argv[argc] = 0;
-    // printf("cmd argc: %d\r\n", argc);
 
     if (argc > 0)
     {
-        if (strcasecmp("toggle", argv[0]) == 0)
+        if (strcasecmp("pwm", argv[0]) == 0)
         {
-            if (argc > 1)
+            if (argc > 1) // rts, dtr
             {
-                if (strcasecmp("rts", argv[1]) == 0)
+                bool is_rts = (strcasecmp("rts", argv[1]) == 0);
+                bool is_dtr = (strcasecmp("dtr", argv[1]) == 0);
+                if (is_rts || is_dtr)
                 {
-                    int period_ms = 100;
-                    if (argc > 2)
+                    float freq_hz = 5;
+                    int ratio_high_level = 1;
+                    int ratio_all_level  = 2;
+                    if (argc > 2) // stop, freq_hz
                     {
                         if (strcasecmp("stop", argv[2]) == 0)
-                            period_ms = 0;
+                            freq_hz = 0;
                         else
-                            period_ms = strtol(argv[2], 0, 0);
+                            freq_hz = strtof(argv[2], NULL);
+                        if (argc > 3) // high ratio
+                        {
+                            char *p_str_ratio_high_level = strtok(argv[3], "/");
+                            char *p_str_ratio_all_level  = strtok(0, "/");
+                            if (p_str_ratio_high_level && p_str_ratio_all_level)
+                            {
+                                ratio_high_level = strtol(p_str_ratio_high_level, 0, 0);
+                                ratio_all_level = strtol(p_str_ratio_all_level, 0, 0);
+                            }
+                        }
                     }
-                    cmd_toggle_rts(period_ms);
+                    cmd_pwm_rts_dtr(is_rts, freq_hz, ratio_high_level, ratio_all_level);
                     ok = true;
                 }
             }
