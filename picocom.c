@@ -38,6 +38,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <limits.h>
+#include <sys/time.h>
 #include <time.h>
 #ifdef USE_FLOCK
 #include <sys/file.h>
@@ -86,6 +87,23 @@ const char *flow_str[] = {
 };
 
 /**********************************************************************/
+typedef enum {
+    TTY_TIMESTAMP_MODE_DISABLE,
+    /*TTY_TIMESTAMP_MODE_RELATIVE,*/
+    TTY_TIMESTAMP_MODE_ABSOLUTE,
+    TTY_TIMESTAMP_MODE_NUM,
+} tty_timestamp_mode_t;
+
+typedef enum {
+    TTY_TIMESTAMP_FSM_IDLE,
+    TTY_TIMESTAMP_FSM_DISPLAY,
+} tty_timestamp_fsm_t;
+
+/*static struct timeval tty_timestamp_relative_tv_ref;*/
+static tty_timestamp_fsm_t tty_timestamp_fsm = TTY_TIMESTAMP_FSM_DISPLAY;
+static tty_timestamp_mode_t tty_timestamp_mode = TTY_TIMESTAMP_MODE_DISABLE;
+
+/**********************************************************************/
 
 /* str for rts/dtr */
 #define RTS_STR     (rts_up ? "low" : "high")
@@ -96,29 +114,30 @@ const char *flow_str[] = {
 /* printable character to control-key */
 #define CKEY(c) ((c) & 0x1f)
 
-#define KEY_EXIT    CKEY('x') /* exit picocom */
-#define KEY_QUIT    CKEY('q') /* exit picocom without reseting port */
-#define KEY_PULSE   CKEY('p') /* pulse DTR */
-#define KEY_TOG_DTR CKEY('t') /* toggle DTR */
-#define KEY_TOG_RTS CKEY('g') /* toggle RTS */
-#define KEY_BAUD    CKEY('b') /* set baudrate */
-#define KEY_BAUD_UP CKEY('u') /* increase baudrate (up) */
-#define KEY_BAUD_DN CKEY('d') /* decrase baudrate (down) */
-#define KEY_FLOW    CKEY('f') /* change flowcntrl mode */
-#define KEY_PARITY  CKEY('y') /* change parity mode */
-#define KEY_BITS    CKEY('i') /* change number of databits */
-#define KEY_STOP    CKEY('j') /* change number of stopbits */
-#define KEY_LECHO   CKEY('l') /* toggle local echo */
-#define KEY_STATUS  CKEY('v') /* show program options */
-#define KEY_HELP    CKEY('h') /* show help (same as [C-k]) */
-#define KEY_SEP     CKEY('z') /* Separator */
-#define KEY_KEYS    CKEY('k') /* show available command keys */
-#define KEY_SEND    CKEY('s') /* send file */
-#define KEY_RECEIVE CKEY('r') /* receive file */
-#define KEY_HEX     CKEY('e') /* write hex */
-#define KEY_WRITE   CKEY('w') /* write string */
-#define KEY_BREAK   CKEY('\\') /* break */
-#define KEY_CMD     CKEY('c') /* command mode */
+#define KEY_EXIT        CKEY('x') /* exit picocom */
+#define KEY_QUIT        CKEY('q') /* exit picocom without reseting port */
+#define KEY_PULSE       CKEY('p') /* pulse DTR */
+#define KEY_TOG_DTR     CKEY('o') /* toggle DTR */
+#define KEY_TOG_RTS     CKEY('g') /* toggle RTS */
+#define KEY_BAUD        CKEY('b') /* set baudrate */
+#define KEY_BAUD_UP     CKEY('u') /* increase baudrate (up) */
+#define KEY_BAUD_DN     CKEY('d') /* decrase baudrate (down) */
+#define KEY_FLOW        CKEY('f') /* change flowcntrl mode */
+#define KEY_PARITY      CKEY('y') /* change parity mode */
+#define KEY_BITS        CKEY('i') /* change number of databits */
+#define KEY_STOP        CKEY('j') /* change number of stopbits */
+#define KEY_LECHO       CKEY('l') /* toggle local echo */
+#define KEY_STATUS      CKEY('v') /* show program options */
+#define KEY_HELP        CKEY('h') /* show help (same as [C-k]) */
+#define KEY_SEP         CKEY('z') /* Separator */
+#define KEY_KEYS        CKEY('k') /* show available command keys */
+#define KEY_SEND        CKEY('s') /* send file */
+#define KEY_RECEIVE     CKEY('r') /* receive file */
+#define KEY_HEX         CKEY('e') /* write hex */
+#define KEY_WRITE       CKEY('w') /* write string */
+#define KEY_BREAK       CKEY('\\') /* break */
+#define KEY_TIMESTAMP   CKEY('t') /* timestamp */
+#define KEY_CMD         CKEY('c') /* command mode */
 
 /**********************************************************************/
 
@@ -140,7 +159,7 @@ const char *flow_str[] = {
 #define M_NFLAGS 14
 
 /* default character mappings */
-#define M_I_DFL (M_IGNCR | M_LFCRLF | M_SPCHEX)
+#define M_I_DFL (M_IGNCR | M_LFCRLF)
 #define M_O_DFL (M_CRCRLF | M_LFCRLF | M_DELBS)
 #define M_E_DFL (M_DELBS | M_CRCRLF)
 
@@ -1033,6 +1052,61 @@ map2hex (char *b, char c)
 }
 
 int
+do_timestamp (char *b, char c)
+{
+    int n = 0;
+
+    if(tty_timestamp_mode)
+    {
+        if(c=='\n' || c=='\r')
+        {
+            tty_timestamp_fsm = TTY_TIMESTAMP_FSM_DISPLAY;
+        }
+        else if (tty_timestamp_fsm != TTY_TIMESTAMP_FSM_IDLE)
+        {
+            struct timeval tv;
+
+            gettimeofday(&tv,NULL);
+
+#if 0
+            if (tty_timestamp_mode == TTY_TIMESTAMP_MODE_RELATIVE)
+            {
+                unsigned int diff_sec, diff_msec;
+
+                diff_sec = tv.tv_sec - tty_timestamp_relative_tv_ref.tv_sec;
+                if(tv.tv_usec/1000 < tty_timestamp_relative_tv_ref.tv_usec/1000)
+                {
+                    diff_sec--;
+                    diff_msec = (1000 + (tv.tv_usec/1000)) - (tty_timestamp_relative_tv_ref.tv_usec/1000);
+                }
+                else
+                {
+                    diff_msec = (tv.tv_usec - tty_timestamp_relative_tv_ref.tv_usec) / 1000;
+                }
+
+                n = sprintf(b, "\x1B[90m" "%02d:%02d.%03d  " "\x1B[0m", diff_sec/60, diff_sec%60, diff_msec);
+
+            }
+            else if (tty_timestamp_mode == TTY_TIMESTAMP_MODE_ABSOLUTE)
+#endif
+            {
+                time_t curtime = tv.tv_sec;
+                struct tm *now = localtime(&curtime);
+
+                // timestamp as MM/DD hh:mm:ss.zzz
+                n = sprintf(b, "\x1B[90m" "%02d/%02d %02d:%02d:%02d.%03d  " "\x1B[0m", now->tm_mon+1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec, (int)(tv.tv_usec/1000));
+            }
+
+            tty_timestamp_fsm = TTY_TIMESTAMP_FSM_IDLE;
+        }
+    }
+
+    //b[n++] = c;
+
+    return n;
+}
+
+int
 do_map (char *b, int map, char c)
 {
     int n = -1;
@@ -1080,14 +1154,22 @@ do_map (char *b, int map, char c)
             n = map2hex(b,c);
         }
         break;
+    case '\x00':
+        /* NULL mappings */
+        n = map2hex(b,c);
+        break;
     default:
         break;
     }
 
     if ( n < 0 && map & M_SPCHEX ) {
         if ( c == '\x7f' || ( (unsigned char)c < 0x20
-                              && c != '\x09' && c != '\x0a'
-                              && c != '\x0d') ) {
+                              && c != '\x08' // Backspace
+                              && c != '\x09'
+                              && c != '\x0a'
+                              && c != '\x0d'
+                              && c != '\x1b' // ESC for Color
+                              ) ) {
             n = map2hex(b,c);
         }
     }
@@ -1326,6 +1408,8 @@ show_keys()
               KEYC(KEY_TOG_RTS));
     fd_printf(STO, "*** [C-%c] : Send break\r\n",
               KEYC(KEY_BREAK));
+    fd_printf(STO, "*** [C-%c] : Toggle timestamp\r\n",
+              KEYC(KEY_TIMESTAMP));
     fd_printf(STO, "*** [C-%c] : Toggle local echo\r\n",
               KEYC(KEY_LECHO));
     fd_printf(STO, "*** [C-%c] : Write hex (11 AA FF, 11AAFF, 11:AA:FF, ...\r\n",
@@ -1679,6 +1763,12 @@ do_command (unsigned char c)
         term_break(tty_fd);
         fd_printf(STO, "\r\n*** break sent ***\r\n");
         break;
+    case KEY_TIMESTAMP:
+        ++tty_timestamp_mode;
+        if (tty_timestamp_mode >= TTY_TIMESTAMP_MODE_NUM)
+            tty_timestamp_mode = 0;
+        fd_printf(STO, "\r\n*** Timestamp %s ***\r\n", tty_timestamp_mode==TTY_TIMESTAMP_MODE_DISABLE?"disabled":"enabled");
+        break;
     case KEY_CMD:
         read_exec_cmd();
         break;
@@ -1833,6 +1923,7 @@ loop(void)
                     if ( writen_ni(log_fd, buff_rd, n) < n )
                         fatal("write to logfile failed: %s", strerror(errno));
                 for (i = 0; i < n; i++) {
+                    bmp += do_timestamp(bmp, buff_rd[i]);
                     bmp += do_map(bmp, opts.imap, buff_rd[i]);
                 }
                 n = bmp - buff_map;
@@ -1955,13 +2046,14 @@ show_usage(char *name)
     printf("  --omap <map> (output mappings)\r\n");
     printf("  --emap <map> (local-echo mappings)\r\n");
     printf("  --lo<g>file <filename>\r\n");
-    printf("  --inits<t>ring <string>\r\n");
+    printf("  --init<S>tring <string>\r\n");
     printf("  --e<x>it-after <msec>\r\n");
     printf("  --e<X>it\r\n");
     printf("  --lower-rts\r\n");
     printf("  --raise-rts\r\n");
     printf("  --lower-dtr\r\n");
     printf("  --raise-dtr\r\n");
+    printf("  --<t>imestamp\r\n");
 #ifdef INOTIFY_SUPPORT
     printf("  --<w>ait\r\n");
     printf("  --<R>econnect (implies -w)\r\n");
@@ -2018,7 +2110,8 @@ parse_args(int argc, char *argv[])
         {"databits", required_argument, 0, 'd'},
         {"stopbits", required_argument, 0, 'p'},
         {"logfile", required_argument, 0, 'g'},
-        {"initstring", required_argument, 0, 't'},
+        {"timestamp", no_argument, 0, 't'},
+        {"initstring", required_argument, 0, 'S'},
         {"exit-after", required_argument, 0, 'x'},
         {"exit", no_argument, 0, 'X'},
         {"lower-rts", no_argument, 0, 1},
@@ -2044,13 +2137,16 @@ parse_args(int argc, char *argv[])
         /* no default error messages printed. */
         opterr = 0;
 
-        c = getopt_long(argc, argv, "hirwRulcqXnv:s:r:e:f:b:y:d:p:g:t:x:",
+        c = getopt_long(argc, argv, "htirwRulcqXnv:s:r:e:f:b:y:d:p:g:I:x:",
                         longOptions, &optionIndex);
 
         if (c < 0)
             break;
 
         switch (c) {
+        case 't':
+            tty_timestamp_mode = TTY_TIMESTAMP_MODE_ABSOLUTE;
+            break;
         case 's':
             strncpy(opts.send_cmd, optarg, sizeof(opts.send_cmd));
             opts.send_cmd[sizeof(opts.send_cmd) - 1] = '\0';
@@ -2192,7 +2288,7 @@ parse_args(int argc, char *argv[])
             if ( opts.log_filename ) free(opts.log_filename);
             opts.log_filename = strdup(optarg);
             break;
-        case 't':
+        case 'S':
             if ( opts.initstring ) free(opts.initstring);
             opts.initstring = strdup(optarg);
             break;
