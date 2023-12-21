@@ -140,7 +140,7 @@ const char *flow_str[] = {
 #define M_NFLAGS 14
 
 /* default character mappings */
-#define M_I_DFL (M_IGNCR | M_LFCRLF)
+#define M_I_DFL (M_IGNCR | M_LFCRLF | M_SPCHEX)
 #define M_O_DFL (M_CRCRLF | M_LFCRLF | M_DELBS)
 #define M_E_DFL (M_DELBS | M_CRCRLF)
 
