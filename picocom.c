@@ -87,6 +87,10 @@ const char *flow_str[] = {
 
 /**********************************************************************/
 
+/* str for rts/dtr */
+#define RTS_STR     (rts_up ? "low" : "high")
+#define DTR_STR     (dtr_up ? "low" : "high")
+
 /* control-key to printable character (lowcase) */
 #define KEYC(k) ((k) | 0x60)
 /* printable character to control-key */
@@ -1255,20 +1259,18 @@ show_status (int quiet)
     mctl = term_get_mctl(tty_fd);
     if (mctl >= 0 && mctl != MCTL_UNAVAIL) {
         if ( ((mctl & MCTL_DTR) ? 1 : 0) == dtr_up ) {
-            statpf(STO, "*** dtr: %s\r\n", dtr_up ? "up" : "down");
+            statpf(STO, "*** dtr: %s\r\n", DTR_STR);
         } else {
             mismatch++;
             statpf(STO, "*** dtr: %s (%s)\r\n",
-                   dtr_up ? "up" : "down",
-                   (mctl & MCTL_DTR) ? "up" : "down");
+                   DTR_STR, (mctl & MCTL_DTR) ? "up" : "down");
         }
         if ( ((mctl & MCTL_RTS) ? 1 : 0) == rts_up ) {
-            statpf(STO, "*** rts: %s\r\n", rts_up ? "up" : "down");
+            statpf(STO, "*** rts: %s\r\n", RTS_STR);
         } else {
             mismatch++;
             statpf(STO, "*** rts: %s (%s)\r\n",
-                   rts_up ? "up" : "down",
-                   (mctl & MCTL_RTS) ? "up" : "down");
+                   RTS_STR, (mctl & MCTL_RTS) ? "up" : "down");
         }
         statpf(STO, "*** mctl: ");
         statpf(STO, "DTR:%c DSR:%c DCD:%c RTS:%c CTS:%c RI:%c\r\n",
@@ -1279,8 +1281,8 @@ show_status (int quiet)
                (mctl & MCTL_CTS) ? '1' : '0',
                (mctl & MCTL_RI) ? '1' : '0');
     } else {
-        statpf(STO, "*** dtr: %s\r\n", dtr_up ? "up" : "down");
-        statpf(STO, "*** rts: %s\r\n", rts_up ? "up" : "down");
+        statpf(STO, "*** dtr: %s\r\n", DTR_STR);
+        statpf(STO, "*** rts: %s\r\n", RTS_STR);
     }
 
     return mismatch;
@@ -1543,13 +1545,11 @@ do_command (unsigned char c)
         break;
     case KEY_TOG_DTR:
         toggle_dtr();
-        fd_printf(STO, "\r\n*** DTR: %s ***\r\n",
-                  dtr_up ? "up" : "down");
+        fd_printf(STO, "\r\n*** DTR: %s ***\r\n", DTR_STR);
         break;
     case KEY_TOG_RTS:
         toggle_rts();
-        fd_printf(STO, "\r\n*** RTS: %s ***\r\n",
-                  rts_up ? "up" : "down");
+        fd_printf(STO, "\r\n*** RTS: %s ***\r\n", RTS_STR);
         break;
     case KEY_BAUD:
     case KEY_BAUD_UP:
