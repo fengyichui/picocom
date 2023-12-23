@@ -94,13 +94,7 @@ typedef enum {
     TTY_TIMESTAMP_MODE_NUM,
 } tty_timestamp_mode_t;
 
-typedef enum {
-    TTY_TIMESTAMP_FSM_IDLE,
-    TTY_TIMESTAMP_FSM_DISPLAY,
-} tty_timestamp_fsm_t;
-
 /*static struct timeval tty_timestamp_relative_tv_ref;*/
-static tty_timestamp_fsm_t tty_timestamp_fsm = TTY_TIMESTAMP_FSM_DISPLAY;
 static tty_timestamp_mode_t tty_timestamp_mode = TTY_TIMESTAMP_MODE_DISABLE;
 
 /**********************************************************************/
@@ -1058,11 +1052,9 @@ do_timestamp (char *b, char c)
 
     if(tty_timestamp_mode)
     {
-        if(c=='\n' || c=='\r')
-        {
-            tty_timestamp_fsm = TTY_TIMESTAMP_FSM_DISPLAY;
-        }
-        else if (tty_timestamp_fsm != TTY_TIMESTAMP_FSM_IDLE)
+        static char pc = '\n';
+
+        if ( (pc=='\n') || ((pc=='\r') && (c!='\n')) )
         {
             struct timeval tv;
 
@@ -1096,9 +1088,9 @@ do_timestamp (char *b, char c)
                 // timestamp as MM/DD hh:mm:ss.zzz
                 n = sprintf(b, "\x1B[90m" "%02d/%02d %02d:%02d:%02d.%03d  " "\x1B[0m", now->tm_mon+1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec, (int)(tv.tv_usec/1000));
             }
-
-            tty_timestamp_fsm = TTY_TIMESTAMP_FSM_IDLE;
         }
+
+        pc = c;
     }
 
     //b[n++] = c;
