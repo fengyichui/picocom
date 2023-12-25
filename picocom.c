@@ -1031,18 +1031,13 @@ fatal (const char *format, ...)
 
 /* maximum number of chars that can replace a single characted
    due to mapping */
-#define M_MAXMAP 4
+#define M_MAXMAP 32
 
 int
 map2hex (char *b, char c)
 {
-    const char *hexd = "0123456789abcdef";
-
-    b[0] = '[';
-    b[1] = hexd[(unsigned char)c >> 4];
-    b[2] = hexd[(unsigned char)c & 0x0f];
-    b[3] = ']';
-    return 4;
+    const char *hexd = "0123456789ABCDEF";
+    return sprintf(b, "\x1B[90m" "{\\x%C%C}" "\x1B[0m", hexd[(unsigned char)c >> 4], hexd[(unsigned char)c & 0x0f]);
 }
 
 int
