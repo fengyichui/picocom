@@ -1049,7 +1049,7 @@ do_timestamp (char *b, char c)
     {
         static char pc = '\n';
 
-        if ( (pc=='\n') || ((pc=='\r') && (c!='\n')) )
+        if ( (pc=='\n') ) //|| ((pc=='\r') && (c!='\n')) )
         {
             struct timeval tv;
 
