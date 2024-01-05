@@ -2397,7 +2397,6 @@ parse_args(int argc, char *argv[])
         printf("exit_after is  : %d ms\r\n", opts.exit_after);
     }
     printf("exit is        : %s\r\n", opts.exit ? "yes" : "no");
-    printf("\r\n");
     fflush(stdout);
 #endif /* of NO_HELP */
 }
@@ -2694,6 +2693,13 @@ start_again:
         free(opts.initstring);
         opts.initstring = NULL;
     }
+
+#ifndef NO_HELP
+    printf("RTS is         : %s level\r\n", RTS_STR);
+    printf("DTR is         : %s level\r\n", DTR_STR);
+    printf("\r\n");
+    fflush(stdout);
+#endif
 
 #ifndef NO_HELP
     if ( ! opts.noescape ) {
