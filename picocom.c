@@ -2695,10 +2695,12 @@ start_again:
     }
 
 #ifndef NO_HELP
-    printf("RTS is         : %s level\r\n", RTS_STR);
-    printf("DTR is         : %s level\r\n", DTR_STR);
-    printf("\r\n");
-    fflush(stdout);
+    if ( ! opts.quiet ) {
+        printf("RTS is         : %s level\r\n", RTS_STR);
+        printf("DTR is         : %s level\r\n", DTR_STR);
+        printf("\r\n");
+        fflush(stdout);
+    }
 #endif
 
 #ifndef NO_HELP
