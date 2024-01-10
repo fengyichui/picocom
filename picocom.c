@@ -633,8 +633,10 @@ init_history (void)
 void
 cleanup_history (void)
 {
-    if (history_file_path)
+    if (history_file_path) {
         free(history_file_path);
+        history_file_path = NULL;
+    }
 }
 
 void
@@ -2593,7 +2595,7 @@ start_again:
 
     if (opts.wait) {
         if ((r = wait_for_file(opts.port)) < 0) {
-            fatal("could not wait for %s to appear: %s", strerror(-r));
+            fatal("could not wait for %s to appear: %s", opts.port, strerror(-r));
         }
     }
 
