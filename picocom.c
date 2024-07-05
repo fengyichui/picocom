@@ -149,7 +149,7 @@ static tty_timestamp_mode_t tty_timestamp_mode = TTY_TIMESTAMP_MODE_DISABLE;
 #define M_CRHEX   (1 << 10)  /* map CR --> hex */
 #define M_LFHEX   (1 << 11) /* map LF --> hex */
 #define M_8BITHEX (1 << 12) /* map 8-bit chars --> hex */
-#define M_NRMHEX  (1 << 13) /* map normal ascii chars --> hex */
+#define M_NRMHEX  (1 << 13) /* map normal ASCII chars --> hex */
 #define M_NFLAGS 14
 
 /* default character mappings */
@@ -180,7 +180,7 @@ struct map_names_s {
     { NULL, 0 }
 };
 
-int
+static int
 parse_map (char *s)
 {
     const char *m;
@@ -203,7 +203,8 @@ parse_map (char *s)
     return flags;
 }
 
-void
+#ifndef NO_HELP
+static void
 print_map (int flags)
 {
     int i;
@@ -213,6 +214,7 @@ print_map (int flags)
             printf("%s,", map_names[i].name);
     printf("\r\n");
 }
+#endif
 
 /**********************************************************************/
 
@@ -248,6 +250,7 @@ struct {
     int quiet;
     int wait;
     int reconnect;
+    struct timespec txdelay;
 } opts = {
     .port = NULL,
     .baud = 115200,
@@ -280,6 +283,7 @@ struct {
     .quiet = 0,
     .wait = 1,
     .reconnect = 1,
+    .txdelay = { 0, 0 },
 };
 
 int sig_exit = 0;
@@ -328,6 +332,24 @@ int tty_write_sz;
 
 /**********************************************************************/
 
+static int
+pinfo(const char *format, ...)
+{
+    va_list args;
+    int len;
+
+    if ( opts.quiet ) {
+        return 0;
+    }
+    va_start(args, format);
+    len = fd_vprintf(STO, format, args);
+    va_end(args);
+
+    return len;
+}
+
+/**********************************************************************/
+
 #ifdef UUCP_LOCK_DIR
 
 /* use HDB UUCP locks  .. see
@@ -336,7 +358,7 @@ int tty_write_sz;
 
 char lockname[_POSIX_PATH_MAX] = "";
 
-int
+static int
 uucp_lockname(const char *dir, const char *file)
 {
     char *p, *cp;
@@ -359,7 +381,7 @@ uucp_lockname(const char *dir, const char *file)
     return 0;
 }
 
-int
+static int
 uucp_lock(void)
 {
     int r, fd, pid;
@@ -399,7 +421,7 @@ uucp_lock(void)
     return 0;
 }
 
-int
+static int
 uucp_unlock(void)
 {
     if ( lockname[0] ) unlink(lockname);
@@ -434,7 +456,7 @@ hex2byte (char c)
     return r;
 }
 
-int
+static int
 hex2bin(unsigned char *buf, int sz, const char *str)
 {
     char c;
@@ -461,7 +483,7 @@ hex2bin(unsigned char *buf, int sz, const char *str)
     return i;
 }
 
-int
+static int
 str2cstr(char *buf, int sz, const char *str)
 {
     int i, n;
@@ -504,7 +526,7 @@ str2cstr(char *buf, int sz, const char *str)
 
 #ifndef LINENOISE
 
-char *
+static char *
 read_filename (void)
 {
     char fname[_POSIX_PATH_MAX];
@@ -519,7 +541,7 @@ read_filename (void)
         return strdup(fname);
 }
 
-int
+static int
 read_baud (void)
 {
     char baudstr[9], *ep;
@@ -541,7 +563,7 @@ read_baud (void)
     return baud;
 }
 
-int
+static int
 read_hex (unsigned char *buff, int sz)
 {
     char hexstr[256];
@@ -565,7 +587,7 @@ read_hex (unsigned char *buff, int sz)
 
 #else /* LINENOISE defined */
 
-void
+static void
 file_completion_cb (const char *buf, linenoiseCompletions *lc)
 {
     DIR *dirp;
@@ -611,7 +633,7 @@ file_completion_cb (const char *buf, linenoiseCompletions *lc)
 
 static char *history_file_path = NULL;
 
-void
+static void
 init_history (void)
 {
     char *home_directory;
@@ -630,7 +652,7 @@ init_history (void)
     }
 }
 
-void
+static void
 cleanup_history (void)
 {
     if (history_file_path) {
@@ -639,7 +661,7 @@ cleanup_history (void)
     }
 }
 
-void
+static void
 add_history (char *fname)
 {
     linenoiseHistoryAdd(fname);
@@ -647,7 +669,7 @@ add_history (char *fname)
         linenoiseHistorySave(history_file_path);
 }
 
-char *
+static char *
 read_filename (void)
 {
     char *fname;
@@ -661,7 +683,7 @@ read_filename (void)
     return fname;
 }
 
-int
+static int
 read_baud (void)
 {
     char *baudstr, *ep;
@@ -687,34 +709,30 @@ read_baud (void)
     return baud;
 }
 
-int
+static int
 read_hex (unsigned char *buff, int sz)
 {
     char *hexstr;
-    int n;
+    int n = 0;
 
     do {
         fd_printf(STO, "\r\n");
         hexstr = linenoise("*** hex: ");
         fd_printf(STO, "\r");
-        if ( hexstr == NULL ) {
-            n = 0;
+        if ( hexstr == NULL )
             break;
-        }
         n = hex2bin(buff, sz, hexstr);
         if ( n < 0 )
             fd_printf(STO, "*** Invalid hex!");
-
-        if (n > 0)
+        else if (n > 0)
             add_history(hexstr);
-
         free(hexstr);
     } while (n < 0);
 
     return n;
 }
 
-int
+static int
 read_str (char *buff, int sz)
 {
     char *str;
@@ -874,7 +892,8 @@ static void cmd_pwm_rts_dtr(bool is_rts, float freq_hz, int ratio_high_level, in
         fd_printf(STO, "*** PWM %s: stop ***\r\n", is_rts?"RTS":"DTR");
 }
 
-void read_exec_cmd (void)
+static void
+read_exec_cmd (void)
 {
     char *cmdstr;
     bool ok = false;
@@ -943,23 +962,7 @@ void read_exec_cmd (void)
 }
 /**********************************************************************/
 
-int
-pinfo(const char *format, ...)
-{
-    va_list args;
-    int len;
-
-    if ( opts.quiet ) {
-        return 0;
-    }
-    va_start(args, format);
-    len = fd_vprintf(STO, format, args);
-    va_end(args);
-
-    return len;
-}
-
-void
+static void
 cleanup (int drain, int noreset, int hup)
 {
     if ( tty_fd >= 0 ) {
@@ -1013,7 +1016,7 @@ cleanup (int drain, int noreset, int hup)
     }
 }
 
-void
+static void
 fatal (const char *format, ...)
 {
     va_list args;
@@ -1035,14 +1038,14 @@ fatal (const char *format, ...)
    due to mapping */
 #define M_MAXMAP 32
 
-int
+static int
 map2hex (char *b, char c)
 {
     const char *hexd = "0123456789ABCDEF";
     return sprintf(b, "\x1B[90m" "{\\x%C%C}" "\x1B[0m", hexd[(unsigned char)c >> 4], hexd[(unsigned char)c & 0x0f]);
 }
 
-int
+static int
 do_timestamp (char *b, char c)
 {
     int n = 0;
@@ -1095,20 +1098,20 @@ do_timestamp (char *b, char c)
     return n;
 }
 
-int
+static int
 do_map (char *b, int map, char c)
 {
     int n = -1;
 
     switch (c) {
     case '\x7f':
-        /* DEL mapings */
+        /* DEL mappings */
         if ( map & M_DELBS ) {
             b[0] = '\x08'; n = 1;
         }
         break;
     case '\x08':
-        /* BS mapings */
+        /* BS mappings */
         if ( map & M_BSDEL ) {
             b[0] = '\x7f'; n = 1;
         }
@@ -1181,7 +1184,7 @@ do_map (char *b, int map, char c)
     return n;
 }
 
-void
+static void
 map_and_write (int fd, int map, char c)
 {
     char b[M_MAXMAP];
@@ -1195,13 +1198,13 @@ map_and_write (int fd, int map, char c)
 
 /**********************************************************************/
 
-int
+static int
 baud_up (int baud)
 {
     return term_baud_up(baud);
 }
 
-int
+static int
 baud_down (int baud)
 {
     int nb;
@@ -1211,7 +1214,7 @@ baud_down (int baud)
     return nb;
 }
 
-enum flowcntrl_e
+static enum flowcntrl_e
 flow_next (enum flowcntrl_e flow)
 {
     switch(flow) {
@@ -1232,7 +1235,7 @@ flow_next (enum flowcntrl_e flow)
     return flow;
 }
 
-enum parity_e
+static enum parity_e
 parity_next (enum parity_e parity)
 {
     switch(parity) {
@@ -1253,7 +1256,7 @@ parity_next (enum parity_e parity)
     return parity;
 }
 
-int
+static int
 bits_next (int bits)
 {
     bits++;
@@ -1262,7 +1265,7 @@ bits_next (int bits)
     return bits;
 }
 
-int
+static int
 stopbits_next (int bits)
 {
     bits++;
@@ -1276,7 +1279,7 @@ stopbits_next (int bits)
 #define statpf(...) \
     do { if (! quiet) fd_printf(__VA_ARGS__); } while(0)
 
-int
+static int
 show_status (int quiet)
 {
     int baud, bits, stopbits, mctl;
@@ -1363,7 +1366,7 @@ show_status (int quiet)
 
 /**********************************************************************/
 
-void
+static void
 show_keys()
 {
 #ifndef NO_HELP
@@ -1373,7 +1376,7 @@ show_keys()
     fd_printf(STO, "\r\n");
     fd_printf(STO, "*** [C-%c] : Exit picocom\r\n",
               KEYC(KEY_EXIT));
-    fd_printf(STO, "*** [C-%c] : Exit without reseting serial port\r\n",
+    fd_printf(STO, "*** [C-%c] : Exit without resetting serial port\r\n",
               KEYC(KEY_QUIT));
     fd_printf(STO, "*** [C-%c] : Set baudrate\r\n",
               KEYC(KEY_BAUD));
@@ -1427,7 +1430,7 @@ show_keys()
 #define RUNCMD_ARGS_MAX 32
 #define RUNCMD_EXEC_FAIL 126
 
-void
+static void
 establish_child_signal_handlers (void)
 {
     struct sigaction dfl_action;
@@ -1441,7 +1444,7 @@ establish_child_signal_handlers (void)
     sigaction (SIGTERM, &dfl_action, NULL);
 }
 
-int
+static int
 run_cmd(int fd, const char *cmd, const char *args_extra)
 {
     pid_t pid;
@@ -1501,6 +1504,8 @@ run_cmd(int fd, const char *cmd, const char *args_extra)
         /* unmanage terminal, and reset it to canonical mode */
         term_drain(STI);
         term_remove(STI);
+        /* flush serial port queues */
+        term_flush(fd);
         /* unmanage serial port fd, without reset */
         term_erase(fd);
         /* set serial port fd to blocking mode */
@@ -1544,7 +1549,8 @@ run_cmd(int fd, const char *cmd, const char *args_extra)
 
 /**********************************************************************/
 
-int tty_q_push(const char *s, int len) {
+static int
+tty_q_push(const char *s, int len) {
     int i, sz, n;
     unsigned char *b;
 
@@ -1575,7 +1581,7 @@ int tty_q_push(const char *s, int len) {
 
 /* Process command key. Returns non-zero if command results in picocom
    exit, zero otherwise. */
-int
+static int
 do_command (unsigned char c)
 {
     int newbaud, newbits, newstopbits;
@@ -1788,7 +1794,7 @@ enum le_reason {
     LE_RECONNECT
 };
 
-enum le_reason
+static enum le_reason
 loop(void)
 {
     enum {
@@ -1852,7 +1858,7 @@ loop(void)
                 pinfo("\r\n** read zero bytes from stdin **\r\n");
                 goto skip_proc_STI;
             } else if (n < 0) {
-                /* is this really necessary? better safe than sory! */
+                /* is this really necessary? better safe than sorry! */
                 if ( errno != EAGAIN && errno != EWOULDBLOCK )
                     fatal("read from stdin failed: %s", strerror(errno));
                 else
@@ -1944,7 +1950,7 @@ loop(void)
 
 /**********************************************************************/
 
-void
+static void
 deadly_handler(int signum)
 {
     (void)signum; /* silence unused warning */
@@ -1955,7 +1961,7 @@ deadly_handler(int signum)
     }
 }
 
-void
+static void
 establish_signal_handlers (void)
 {
         struct sigaction exit_action, ign_action;
@@ -1983,7 +1989,7 @@ establish_signal_handlers (void)
 
 /**********************************************************************/
 
-void
+static void
 show_usage(char *name)
 {
 #ifndef NO_HELP
@@ -2022,6 +2028,7 @@ show_usage(char *name)
     printf("  --parit<y> o (=odd) | e (=even) | n (=none)\r\n");
     printf("  --<d>atabits 5 | 6 | 7 | 8\r\n");
     printf("  --sto<p>bits 1 | 2\r\n");
+    printf("  --<T>xdelay <nsec>\r\n");
     printf("  --<e>scape <char>\r\n");
     printf("  --<n>o-escape\r\n");
     printf("  --e<c>ho\r\n");
@@ -2063,7 +2070,7 @@ show_usage(char *name)
     printf("  crhex : map CR --> hex\r\n");
     printf("  lfhex : map LF --> hex\r\n");
     printf("  8bithex : map 8-bit chars --> hex\r\n");
-    printf("  nrmhex : map normal ascii chars --> hex\r\n");
+    printf("  nrmhex : map normal ASCII chars --> hex\r\n");
     printf("<?> indicates the equivalent short option.\r\n");
     printf("Short options are prefixed by \"-\" instead of by \"--\".\r\n");
 #else /* defined NO_HELP */
@@ -2074,7 +2081,7 @@ show_usage(char *name)
 
 /**********************************************************************/
 
-void
+static void
 parse_args(int argc, char *argv[])
 {
     int r;
@@ -2111,6 +2118,7 @@ parse_args(int argc, char *argv[])
         {"wait", no_argument, 0, 'w'},
         {"reconnect", no_argument, 0, 'R'},
 #endif
+        {"tx-delay", required_argument, 0, 'T'},
         {"quiet", no_argument, 0, 'q'},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}
@@ -2126,7 +2134,7 @@ parse_args(int argc, char *argv[])
         /* no default error messages printed. */
         opterr = 0;
 
-        c = getopt_long(argc, argv, "htirwRulcqXnv:s:r:e:f:b:y:d:p:g:I:x:",
+        c = getopt_long(argc, argv, "htirwRulcqXnv:s:r:e:f:b:y:d:p:g:I:x:T:",
                         longOptions, &optionIndex);
 
         if (c < 0)
@@ -2293,10 +2301,19 @@ parse_args(int argc, char *argv[])
         case 4:
             opts.raise_dtr = 1;
             break;
+        case 'T':
+            opts.txdelay.tv_nsec = strtol(optarg, &ep, 10);
+
+            /* Limit to 1 second */
+            if (!ep || *ep != '\0' || opts.txdelay.tv_nsec < 0 || opts.txdelay.tv_nsec >= 1000000000) {
+                fprintf(stderr, "Invalid --tx-delay (must be between 0 and 999999999): %s\n", optarg);
+                r = -1;
+            }
+            break;
         case 'x':
             opts.exit_after = strtol(optarg, &ep, 10);
             if ( ! ep || *ep != '\0' || opts.exit_after < 0 ) {
-                fprintf(stderr, "Inavild --exit-after: %s\r\n", optarg);
+                fprintf(stderr, "Invalid --exit-after: %s\r\n", optarg);
                 r = -1;
                 break;
             }
@@ -2367,6 +2384,7 @@ parse_args(int argc, char *argv[])
     printf("parity is      : %s\r\n", parity_str[opts.parity]);
     printf("databits are   : %d\r\n", opts.databits);
     printf("stopbits are   : %d\r\n", opts.stopbits);
+    printf("txdelay is     : %ld ns\r\n", opts.txdelay.tv_nsec);
     if ( opts.noescape ) {
         printf("escape is      : none\r\n");
     } else {
@@ -2430,7 +2448,7 @@ char *autocomplete_common_ports(char *port)
     return strdup(test);
 }
 
-void
+static void
 set_dtr_rts (void)
 {
     int r;
@@ -2461,7 +2479,7 @@ set_dtr_rts (void)
                   term_strerror(term_errno, errno));
         dtr_up = 1;
     }
-    /* Try to read the status of the modem-conrtol lines from the
+    /* Try to read the status of the modem-control lines from the
        port. */
     r = term_get_mctl(tty_fd);
     if ( r >= 0 && r != MCTL_UNAVAIL ) {
@@ -2470,7 +2488,7 @@ set_dtr_rts (void)
     }
 }
 
-int
+static int
 wait_for_file (const char *file)
 {
 #ifdef INOTIFY_SUPPORT
