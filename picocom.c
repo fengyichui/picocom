@@ -414,7 +414,7 @@ uucp_lock(void)
     fd = open(lockname, O_WRONLY|O_CREAT|O_EXCL, 0666);
     if ( fd < 0 ) { lockname[0] = '\0'; return -1; }
     umask(m);
-    snprintf(buf, sizeof(buf), "%04d\r\n", getpid());
+    snprintf(buf, sizeof(buf), "%04d\n", getpid());
     write(fd, buf, strlen(buf));
     close(fd);
 
@@ -975,10 +975,10 @@ cleanup (int drain, int noreset, int hup)
            it's output buffers *and* flow-control is enabled we may
            block forever. So we "fake" a flush, by temporarily setting
            f/c to none, waiting for any data in the output buffer to
-           drain, and then reseting f/c to it's original setting. If
+           drain, and then resetting f/c to it's original setting. If
            the real flush above does works, then the fake one should
            amount to instantaneously switching f/c to none and then
-           back to its propper setting. */
+           back to its proper setting. */
         if ( opts.flow != FC_NONE ) term_fake_flush(tty_fd);
         term_set_hupcl(tty_fd, !noreset || hup);
         term_apply(tty_fd, 1);
@@ -1536,7 +1536,7 @@ run_cmd(int fd, const char *cmd, const char *args_extra)
         }
         argv[argc] = NULL;
 
-        /* run extenral command */
+        /* run external command */
         fd_printf(STE, "$ %s %s\r\n", cmd, args_extra);
         establish_child_signal_handlers();
         sigprocmask(SIG_SETMASK, &sigm_old, NULL);
@@ -1998,83 +1998,83 @@ show_usage(char *name)
     s = strrchr(name, '/');
     s = s ? s+1 : name;
 
-    printf("picocom v%s\r\n", VERSION_STR);
+    printf("picocom v%s\n", VERSION_STR);
 
-    printf("\r\nCompiled-in options:\r\n");
-    printf("  TTY_Q_SZ is %d\r\n", TTY_Q_SZ);
+    printf("\nCompiled-in options:\n");
+    printf("  TTY_Q_SZ is %d\n", TTY_Q_SZ);
 #ifdef HIGH_BAUD
-    printf("  HIGH_BAUD is enabled\r\n");
+    printf("  HIGH_BAUD is enabled\n");
 #endif
 #ifdef USE_FLOCK
-    printf("  USE_FLOCK is enabled\r\n");
+    printf("  USE_FLOCK is enabled\n");
 #endif
 #ifdef UUCP_LOCK_DIR
-    printf("  UUCP_LOCK_DIR is: %s\r\n", UUCP_LOCK_DIR);
+    printf("  UUCP_LOCK_DIR is: %s\n", UUCP_LOCK_DIR);
 #endif
 #ifdef LINENOISE
-    printf("  LINENOISE is enabled\r\n");
-    printf("  HISTFILE is: %s\r\n", HISTFILE);
+    printf("  LINENOISE is enabled\n");
+    printf("  HISTFILE is: %s\n", HISTFILE);
 #endif
 #ifdef USE_CUSTOM_BAUD
-    printf("  USE_CUSTOM_BAUD is enabled\r\n");
+    printf("  USE_CUSTOM_BAUD is enabled\n");
     if ( ! use_custom_baud() )
-        printf("  NO_CUSTOM_BAUD is set\r\n");
+        printf("  NO_CUSTOM_BAUD is set\n");
 #endif
 
-    printf("\r\nUsage is: %s [options] <tty port device>\r\n", s);
-    printf("Options are:\r\n");
-    printf("  --<b>aud <baudrate>\r\n");
-    printf("  --<f>low x (=soft,xon/xoff) | h (=hard) | n (=none)\r\n");
-    printf("  --parit<y> o (=odd) | e (=even) | n (=none)\r\n");
-    printf("  --<d>atabits 5 | 6 | 7 | 8\r\n");
-    printf("  --sto<p>bits 1 | 2\r\n");
-    printf("  --<T>xdelay <nsec>\r\n");
-    printf("  --<e>scape <char>\r\n");
-    printf("  --<n>o-escape\r\n");
-    printf("  --e<c>ho\r\n");
-    printf("  --no<i>nit\r\n");
-    printf("  --no<r>eset\r\n");
-    printf("  --hang<u>p\r\n");
-    printf("  --no<l>ock\r\n");
-    printf("  --<s>end-cmd <command>\r\n");
-    printf("  --recei<v>e-cmd <command>\r\n");
-    printf("  --imap <map> (input mappings)\r\n");
-    printf("  --omap <map> (output mappings)\r\n");
-    printf("  --emap <map> (local-echo mappings)\r\n");
-    printf("  --lo<g>file <filename>\r\n");
-    printf("  --init<S>tring <string>\r\n");
-    printf("  --e<x>it-after <msec>\r\n");
-    printf("  --e<X>it\r\n");
-    printf("  --lower-rts\r\n");
-    printf("  --raise-rts\r\n");
-    printf("  --lower-dtr\r\n");
-    printf("  --raise-dtr\r\n");
-    printf("  --<t>imestamp\r\n");
+    printf("\nUsage is: %s [options] <tty port device>\n", s);
+    printf("Options are:\n");
+    printf("  --<b>aud <baudrate>\n");
+    printf("  --<f>low x (=soft,xon/xoff) | h (=hard) | n (=none)\n");
+    printf("  --parit<y> o (=odd) | e (=even) | n (=none)\n");
+    printf("  --<d>atabits 5 | 6 | 7 | 8\n");
+    printf("  --sto<p>bits 1 | 2\n");
+    printf("  --<T>xdelay <nsec>\n");
+    printf("  --<e>scape <char>\n");
+    printf("  --<n>o-escape\n");
+    printf("  --e<c>ho\n");
+    printf("  --no<i>nit\n");
+    printf("  --no<r>eset\n");
+    printf("  --hang<u>p\n");
+    printf("  --no<l>ock\n");
+    printf("  --<s>end-cmd <command>\n");
+    printf("  --recei<v>e-cmd <command>\n");
+    printf("  --imap <map> (input mappings)\n");
+    printf("  --omap <map> (output mappings)\n");
+    printf("  --emap <map> (local-echo mappings)\n");
+    printf("  --lo<g>file <filename>\n");
+    printf("  --init<S>tring <string>\n");
+    printf("  --e<x>it-after <msec>\n");
+    printf("  --e<X>it\n");
+    printf("  --lower-rts\n");
+    printf("  --raise-rts\n");
+    printf("  --lower-dtr\n");
+    printf("  --raise-dtr\n");
+    printf("  --<t>imestamp\n");
 #ifdef INOTIFY_SUPPORT
-    printf("  --<w>ait\r\n");
-    printf("  --<R>econnect (implies -w)\r\n");
+    printf("  --<w>ait\n");
+    printf("  --<R>econnect (implies -w)\n");
 #endif
-    printf("  --<q>uiet\r\n");
-    printf("  --<h>elp\r\n");
-    printf("<map> is a comma-separated list of one or more of:\r\n");
-    printf("  crlf : map CR --> LF\r\n");
-    printf("  crcrlf : map CR --> CR + LF\r\n");
-    printf("  igncr : ignore CR\r\n");
-    printf("  lfcr : map LF --> CR\r\n");
-    printf("  lfcrlf : map LF --> CR + LF\r\n");
-    printf("  ignlf : ignore LF\r\n");
-    printf("  bsdel : map BS --> DEL\r\n");
-    printf("  delbs : map DEL --> BS\r\n");
-    printf("  spchex : map special chars (excl. CR, LF & TAB) --> hex\r\n");
-    printf("  tabhex : map TAB --> hex\r\n");
-    printf("  crhex : map CR --> hex\r\n");
-    printf("  lfhex : map LF --> hex\r\n");
-    printf("  8bithex : map 8-bit chars --> hex\r\n");
-    printf("  nrmhex : map normal ASCII chars --> hex\r\n");
-    printf("<?> indicates the equivalent short option.\r\n");
-    printf("Short options are prefixed by \"-\" instead of by \"--\".\r\n");
+    printf("  --<q>uiet\n");
+    printf("  --<h>elp\n");
+    printf("<map> is a comma-separated list of one or more of:\n");
+    printf("  crlf : map CR --> LF\n");
+    printf("  crcrlf : map CR --> CR + LF\n");
+    printf("  igncr : ignore CR\n");
+    printf("  lfcr : map LF --> CR\n");
+    printf("  lfcrlf : map LF --> CR + LF\n");
+    printf("  ignlf : ignore LF\n");
+    printf("  bsdel : map BS --> DEL\n");
+    printf("  delbs : map DEL --> BS\n");
+    printf("  spchex : map special chars (excl. CR, LF & TAB) --> hex\n");
+    printf("  tabhex : map TAB --> hex\n");
+    printf("  crhex : map CR --> hex\n");
+    printf("  lfhex : map LF --> hex\n");
+    printf("  8bithex : map 8-bit chars --> hex\n");
+    printf("  nrmhex : map normal ASCII chars --> hex\n");
+    printf("<?> indicates the equivalent short option.\n");
+    printf("Short options are prefixed by \"-\" instead of by \"--\".\n");
 #else /* defined NO_HELP */
-    printf("Help disabled.\r\n");
+    printf("Help disabled.\n");
 #endif /* of NO_HELP */
     fflush(stdout);
 }
@@ -2155,17 +2155,17 @@ parse_args(int argc, char *argv[])
         case 'I':
             map = parse_map(optarg);
             if (map >= 0) opts.imap = map;
-            else { fprintf(stderr, "Invalid --imap\r\n"); r = -1; }
+            else { fprintf(stderr, "Invalid --imap\n"); r = -1; }
             break;
         case 'O':
             map = parse_map(optarg);
             if (map >= 0) opts.omap = map;
-            else { fprintf(stderr, "Invalid --omap\r\n"); r = -1; }
+            else { fprintf(stderr, "Invalid --omap\n"); r = -1; }
             break;
         case 'E':
             map = parse_map(optarg);
             if (map >= 0) opts.emap = map;
-            else { fprintf(stderr, "Invalid --emap\r\n"); r = -1; }
+            else { fprintf(stderr, "Invalid --emap\n"); r = -1; }
             break;
         case 'c':
             opts.lecho = 1;
@@ -2207,7 +2207,7 @@ parse_args(int argc, char *argv[])
                 opts.flow = FC_NONE;
                 break;
             default:
-                fprintf(stderr, "Invalid --flow: %c\r\n", optarg[0]);
+                fprintf(stderr, "Invalid --flow: %c\n", optarg[0]);
                 r = -1;
                 break;
             }
@@ -2215,7 +2215,7 @@ parse_args(int argc, char *argv[])
         case 'b':
             opts.baud = atoi(optarg);
             if ( opts.baud == 0 || ! term_baud_ok(opts.baud) ) {
-                fprintf(stderr, "Invalid --baud: %d\r\n", opts.baud);
+                fprintf(stderr, "Invalid --baud: %d\n", opts.baud);
                 r = -1;
             }
             break;
@@ -2231,7 +2231,7 @@ parse_args(int argc, char *argv[])
                 opts.parity = P_NONE;
                 break;
             default:
-                fprintf(stderr, "Invalid --parity: %c\r\n", optarg[0]);
+                fprintf(stderr, "Invalid --parity: %c\n", optarg[0]);
                 r = -1;
                 break;
             }
@@ -2251,7 +2251,7 @@ parse_args(int argc, char *argv[])
                 opts.databits = 8;
                 break;
             default:
-                fprintf(stderr, "Invalid --databits: %c\r\n", optarg[0]);
+                fprintf(stderr, "Invalid --databits: %c\n", optarg[0]);
                 r = -1;
                 break;
             }
@@ -2276,7 +2276,7 @@ parse_args(int argc, char *argv[])
                 opts.parity = P_NONE;
                 break;
             default:
-                fprintf(stderr, "Invalid --stopbits: %c\r\n", optarg[0]);
+                fprintf(stderr, "Invalid --stopbits: %c\n", optarg[0]);
                 r = -1;
                 break;
             }
@@ -2313,7 +2313,7 @@ parse_args(int argc, char *argv[])
         case 'x':
             opts.exit_after = strtol(optarg, &ep, 10);
             if ( ! ep || *ep != '\0' || opts.exit_after < 0 ) {
-                fprintf(stderr, "Invalid --exit-after: %s\r\n", optarg);
+                fprintf(stderr, "Invalid --exit-after: %s\n", optarg);
                 r = -1;
                 break;
             }
@@ -2337,22 +2337,22 @@ parse_args(int argc, char *argv[])
             exit(EXIT_SUCCESS);
         case '?':
         default:
-            fprintf(stderr, "Unrecognized option(s)\r\n");
+            fprintf(stderr, "Unrecognized option(s)\n");
             r = -1;
             break;
         }
         if ( r < 0 ) {
-            fprintf(stderr, "Run with '--help'.\r\n");
+            fprintf(stderr, "Run with '--help'.\n");
             exit(EXIT_FAILURE);
         }
     } /* while */
 
     if ( opts.raise_rts && opts.lower_rts ) {
-        fprintf(stderr, "Both --raise-rts and --lower-rts given\r\n");
+        fprintf(stderr, "Both --raise-rts and --lower-rts given\n");
         exit(EXIT_FAILURE);
     }
     if ( opts.raise_dtr && opts.lower_dtr ) {
-        fprintf(stderr, "Both --raise-dtr and --lower-dtr given\r\n");
+        fprintf(stderr, "Both --raise-dtr and --lower-dtr given\n");
         exit(EXIT_FAILURE);
     }
 
@@ -2360,13 +2360,13 @@ parse_args(int argc, char *argv[])
     if ( opts.exit ) opts.exit_after = -1;
 
     if ( (argc - optind) < 1) {
-        fprintf(stderr, "No port given\r\n");
-        fprintf(stderr, "Run with '--help'.\r\n");
+        fprintf(stderr, "No port given\n");
+        fprintf(stderr, "Run with '--help'.\n");
         exit(EXIT_FAILURE);
     }
     opts.port = strdup(argv[argc-1]);
     if ( ! opts.port ) {
-        fprintf(stderr, "Out of memory\r\n");
+        fprintf(stderr, "Out of memory\n");
         exit(EXIT_FAILURE);
     } else {
         opts.port = autocomplete_common_ports(opts.port);
