@@ -1934,7 +1934,12 @@ loop(void)
             int sz;
             sz = (tty_q.len < tty_write_sz) ? tty_q.len : tty_write_sz;
             do {
-                n = write(tty_fd, tty_q.buff, sz);
+                if (opts.txdelay.tv_nsec) {
+                    n = write(tty_fd, tty_q.buff, 1);
+                    nanosleep(&opts.txdelay, NULL);
+                } else {
+                    n = write(tty_fd, tty_q.buff, sz);
+                }
             } while ( n < 0 && errno == EINTR );
             if ( n <= 0 )
                 fatal("write to port failed: %s", strerror(errno));
