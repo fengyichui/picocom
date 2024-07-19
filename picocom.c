@@ -2590,7 +2590,7 @@ int
 main (int argc, char *argv[])
 {
     int xcode = EXIT_SUCCESS;
-    int ler;
+    int ler = LE_CMD;
     int r;
 
 start_again:
@@ -2623,8 +2623,16 @@ start_again:
     }
 
     tty_fd = open(opts.port, O_RDWR | O_NONBLOCK | O_NOCTTY);
-    if (tty_fd < 0)
-        fatal("cannot open %s: %s", opts.port, strerror(errno));
+    if (tty_fd < 0) {
+        if (opts.reconnect && ler == LE_RECONNECT) { // errno==ENODEV
+            pinfo("Error: cannot open %s: %s\r\n", opts.port, strerror(errno));
+            pinfo("Retry ...\r\n");
+            sleep(1);
+            goto start_again;
+        } else {
+            fatal("cannot open %s: %s", opts.port, strerror(errno));
+        }
+    }
 
 #ifdef USE_FLOCK
     if ( ! opts.nolock ) {
