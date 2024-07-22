@@ -154,7 +154,7 @@ static tty_timestamp_mode_t tty_timestamp_mode = TTY_TIMESTAMP_MODE_DISABLE;
 
 /* default character mappings */
 #define M_I_DFL 0 //(M_IGNCR | M_LFCRLF)
-#define M_O_DFL 0 //(M_CRCRLF | M_LFCRLF | M_DELBS)
+#define M_O_DFL M_DELBS //(M_CRCRLF | M_LFCRLF | M_DELBS)
 #define M_E_DFL (M_DELBS | M_CRCRLF)
 
 /* character mapping names */
