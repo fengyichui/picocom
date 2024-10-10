@@ -89,12 +89,12 @@ const char *flow_str[] = {
 /**********************************************************************/
 typedef enum {
     TTY_TIMESTAMP_MODE_DISABLE,
-    /*TTY_TIMESTAMP_MODE_RELATIVE,*/
+    TTY_TIMESTAMP_MODE_RELATIVE,
     TTY_TIMESTAMP_MODE_ABSOLUTE,
     TTY_TIMESTAMP_MODE_NUM,
 } tty_timestamp_mode_t;
 
-/*static struct timeval tty_timestamp_relative_tv_ref;*/
+static struct timeval tty_timestamp_relative_tv_ref;
 static tty_timestamp_mode_t tty_timestamp_mode = TTY_TIMESTAMP_MODE_DISABLE;
 
 /**********************************************************************/
@@ -1058,9 +1058,8 @@ do_timestamp (char *b, char c)
         {
             struct timeval tv;
 
-            gettimeofday(&tv,NULL);
+            gettimeofday(&tv, NULL);
 
-#if 0
             if (tty_timestamp_mode == TTY_TIMESTAMP_MODE_RELATIVE)
             {
                 unsigned int diff_sec, diff_msec;
@@ -1076,11 +1075,11 @@ do_timestamp (char *b, char c)
                     diff_msec = (tv.tv_usec - tty_timestamp_relative_tv_ref.tv_usec) / 1000;
                 }
 
+                // timestamp as mm:ss.zzz
                 n = sprintf(b, "\x1B[90m" "%02d:%02d.%03d  " "\x1B[0m", diff_sec/60, diff_sec%60, diff_msec);
 
             }
             else if (tty_timestamp_mode == TTY_TIMESTAMP_MODE_ABSOLUTE)
-#endif
             {
                 time_t curtime = tv.tv_sec;
                 struct tm *now = localtime(&curtime);
@@ -1762,7 +1761,9 @@ do_command (unsigned char c)
         ++tty_timestamp_mode;
         if (tty_timestamp_mode >= TTY_TIMESTAMP_MODE_NUM)
             tty_timestamp_mode = 0;
-        fd_printf(STO, "\r\n*** Timestamp %s ***\r\n", tty_timestamp_mode==TTY_TIMESTAMP_MODE_DISABLE?"disabled":"enabled");
+        gettimeofday(&tty_timestamp_relative_tv_ref, NULL);
+        fd_printf(STO, "\r\n*** Timestamp %s ***\r\n", tty_timestamp_mode==TTY_TIMESTAMP_MODE_DISABLE ? "disabled" :
+                                                       tty_timestamp_mode==TTY_TIMESTAMP_MODE_ABSOLUTE ? "absolute" : "relative");
         break;
     case KEY_CMD:
         read_exec_cmd();

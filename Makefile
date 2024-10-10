@@ -1,5 +1,5 @@
 
-VERSION = 4.1.3\(QIANG\)
+VERSION = 4.1.4\(QIANG\)
 
 #CC ?= gcc
 CPPFLAGS += -DVERSION_STR=\"$(VERSION)\"
